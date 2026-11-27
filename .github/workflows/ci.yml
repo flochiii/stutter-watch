@@ -36,5 +36,7 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Run tests
         run: cargo test --locked --all-targets
-      - name: Check release build
-        run: cargo build --locked --release
+      - name: Check portable release packaging
+        run: python scripts/package-windows.py
+      - name: Smoke-test the packaged executable
+        run: ./scripts/smoke-windows.ps1 -Archive (Get-Item target/dist/*.zip).FullName

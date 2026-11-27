@@ -13,7 +13,9 @@ Stutter Watch is a native Windows performance recorder written in Rust. It keeps
 
 [Getting started](docs/GETTING_STARTED.md) · [Data & privacy](docs/DATA_AND_PRIVACY.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)
 
-> **Early development, source available now.** There are no official downloadable builds yet. Build from source using the instructions below. A detected incident is evidence to inspect, not a proven explanation for a visible freeze.
+> **Windows preview:** [download v0.1.0](https://github.com/flochiii/stutter-watch/releases/tag/v0.1.0). Extract the ZIP and open **stutter-watch.exe**. A detected incident is evidence to inspect, not a proven explanation for a visible freeze.
+
+The portable build needs no Rust installation. Configuration and recordings stay beside the executable. See the [Windows quick start](docs/WINDOWS_PORTABLE.md) for checksums, permissions, and updates. The executable is currently unsigned.
 
 ## What it does
 

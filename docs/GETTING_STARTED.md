@@ -2,7 +2,11 @@
 
 [README](../README.md) · [Data and privacy](DATA_AND_PRIVACY.md) · [Architecture](ARCHITECTURE.md)
 
-## Build and run
+## Download and run
+
+Download the Windows x64 ZIP from [Releases](https://github.com/flochiii/stutter-watch/releases/tag/v0.1.0), extract it to a writable local folder, and open **stutter-watch.exe**. A no-argument launch opens the panel and uses `config.toml` beside the executable. Opening it again activates that recorder. See the [portable guide](WINDOWS_PORTABLE.md) for verification and updates.
+
+## Build from source
 
 Use Windows x64, Rust 1.97+ (MSVC), Visual Studio Build Tools with C++ support, and the Windows SDK including `rc.exe`. Local interactive checks have used Windows 11; broader compatibility is still being tested.
 
@@ -14,7 +18,7 @@ Copy-Item config.example.toml config.toml
 .\target\release\stutter-watch.exe --config .\config.toml --panel
 ```
 
-Keep ordinary-use configuration and logs outside synchronized folders. Relative `logs_dir` paths resolve against the config's directory. A missing config is created with defaults. English is the initial language. There are no official release binaries or automatic updates yet.
+Keep ordinary-use configuration and logs outside synchronized folders. Relative `logs_dir` paths resolve against the config's directory. A missing config is created with defaults. English is the initial language. Updates are manual. An explicit `run` command starts in the background; CLI launches with arguments use the selected `--config` or `config.toml` in the working directory.
 
 ## Record a stutter
 

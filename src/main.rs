@@ -109,10 +109,11 @@ fn main() -> Result<()> {
     }
     // Reopening a portable app activates its existing panel without replacing
     // that recorder's startup diagnostics or starting another set of sources.
-    if cli.panel && cli.self_test.is_none() && tray::signal(&cli.config, false).is_ok() {
+    let recording = matches!(cli.command, None | Some(Command::Run));
+    if recording && cli.panel && cli.self_test.is_none() && tray::signal(&cli.config, false).is_ok()
+    {
         return Ok(());
     }
-    let recording = matches!(cli.command, None | Some(Command::Run));
     if recording {
         startup::begin(&cli.config);
         startup::phase("configuration.loading");
@@ -130,35 +131,6 @@ fn main() -> Result<()> {
 fn portable_launch(cli: &mut Cli, executable: &Path) {
     cli.config = executable.with_file_name("config.toml");
     cli.panel = true;
-}
-
-#[cfg(test)]
-mod launch_tests {
-    use super::*;
-
-    #[test]
-    fn portable_launch_keeps_data_beside_executable() {
-        let mut cli = Cli::parse_from(["stutter-watch"]);
-        portable_launch(
-            &mut cli,
-            Path::new(r"C:\Portable Apps\Stutter Watch\stutter-watch.exe"),
-        );
-        assert_eq!(
-            cli.config,
-            Path::new(r"C:\Portable Apps\Stutter Watch\config.toml")
-        );
-        assert!(cli.panel);
-        assert!(cli.command.is_none());
-        assert!(cli.self_test.is_none());
-    }
-
-    #[test]
-    fn explicit_run_remains_background_and_uses_selected_config() {
-        let cli = Cli::parse_from(["stutter-watch", "--config", "custom.toml", "run"]);
-        assert!(!cli.panel);
-        assert_eq!(cli.config, Path::new("custom.toml"));
-        assert!(matches!(cli.command, Some(Command::Run)));
-    }
 }
 
 fn execute(cli: Cli) -> Result<()> {
@@ -666,4 +638,33 @@ fn run(
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod launch_tests {
+    use super::*;
+
+    #[test]
+    fn portable_launch_keeps_data_beside_executable() {
+        let mut cli = Cli::parse_from(["stutter-watch"]);
+        portable_launch(
+            &mut cli,
+            Path::new(r"C:\Portable Apps\Stutter Watch\stutter-watch.exe"),
+        );
+        assert_eq!(
+            cli.config,
+            Path::new(r"C:\Portable Apps\Stutter Watch\config.toml")
+        );
+        assert!(cli.panel);
+        assert!(cli.command.is_none());
+        assert!(cli.self_test.is_none());
+    }
+
+    #[test]
+    fn explicit_run_remains_background_and_uses_selected_config() {
+        let cli = Cli::parse_from(["stutter-watch", "--config", "custom.toml", "run"]);
+        assert!(!cli.panel);
+        assert_eq!(cli.config, Path::new("custom.toml"));
+        assert!(matches!(cli.command, Some(Command::Run)));
+    }
 }
