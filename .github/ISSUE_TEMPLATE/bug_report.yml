@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible problem with the recorder or native interface.
+body:
+  - type: markdown
+    attributes:
+      value: Please write in English. Review screenshots and diagnostic excerpts before sharing; do not upload your entire logs folder.
+  - type: input
+    id: version
+    attributes:
+      label: Commit or version
+      placeholder: Commit hash or version shown by --version
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Windows and relevant hardware
+      placeholder: Windows version/build, CPU/GPU if relevant
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources and permissions
+      description: Which collection sources were enabled? Was the recorder elevated? Include relevant Source details, with private paths removed.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include expected behavior and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Optional redacted evidence
+      description: A screenshot or minimal excerpt. Remove titles, private paths, identifiers, and unrelated application details.

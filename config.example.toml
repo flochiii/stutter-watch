@@ -1,0 +1,59 @@
+# stutter-watch configuration, schema 2.
+# MB in the panel = 1,000,000 bytes. rotate_mb alone is still MiB.
+schema_version = 2
+language = "en" # en/de/es/fr/pl/pt/ru/uk/zh/ja
+sample_ms = 500 # presets/graph visibility do not alter source timing
+ring_seconds = 35
+flush_seconds = 60 # an additional 64-sample bound caps the pending batch
+logs_dir = "logs"
+rotate_mb = 20
+manual_seconds = 30
+manual_post_seconds = 10
+pre_seconds = 15
+post_seconds = 5
+cooldown_seconds = 10
+frame_ms = 100.0 # measured Present API work, NOT an idle gap between frames
+dwm_ms = 100.0
+hung_ms = 150
+hotkey = "Ctrl+Shift+F12"
+tray = true
+autostart_elevated = false
+boot_seconds = 180
+nvidia_tgp_w = 40.0
+
+[collection]
+cpu_total = true
+cpu_cores = false
+memory = true
+disks = true
+process_cpu = true
+process_memory = true
+process_io = true
+window_response = true
+frames = true
+gpu = true
+gpu_details = false
+dpc = true
+dpc_events = true
+boot = true
+process_limit = 5
+
+[history]
+mode = "lossless" # or "summary" (lossy ordinary history, full incident data)
+ordinary_budget_bytes = 500000000
+retention_hours = 24
+summary_seconds = 5
+reserve_free_bytes = 256000000 # engineering default, configurable; no RAM limit implied
+
+[privacy]
+window_titles = false
+
+# Display only: selecting a metric does not enable its collector.
+[tray_display]
+status = true
+cpu = true
+memory = true
+gpu = false
+disk_latency = false
+dpc = false
+window_response = false

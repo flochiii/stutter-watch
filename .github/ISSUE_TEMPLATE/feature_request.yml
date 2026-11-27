@@ -1,0 +1,17 @@
+name: Feature request
+description: Suggest an improvement with a concrete use case.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Please write in English and describe a concrete workflow.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Include alternatives and any expected collection, storage, or resource costs.
+    validations:
+      required: true
