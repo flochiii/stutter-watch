@@ -1,15 +1,25 @@
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
-        let manifest =
-            std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").expect("manifest directory"))
-                .join("app.manifest");
+        let root = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
+        let version = std::env::var("CARGO_PKG_VERSION").unwrap();
+        let parts: Vec<_> = ["MAJOR", "MINOR", "PATCH"]
+            .map(|part| std::env::var(format!("CARGO_PKG_VERSION_{part}")).unwrap())
+            .into_iter()
+            .chain(std::iter::once("0".into()))
+            .collect();
+        let manifest = out.join("app.manifest");
+        let template = std::fs::read_to_string(root.join("app.manifest")).unwrap();
+        std::fs::write(
+            &manifest,
+            template.replace("@APP_VERSION@", &parts.join(".")),
+        )
+        .unwrap();
         println!("cargo:rustc-link-arg-bin=stutter-watch=/MANIFEST:EMBED");
         println!(
             "cargo:rustc-link-arg-bin=stutter-watch=/MANIFESTINPUT:{}",
             manifest.display()
         );
-        let root = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-        let out = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
         let icon = root.join("assets/app.ico");
         let rc = out.join("app.rc");
         let res = out.join("app.res");
@@ -17,8 +27,8 @@ fn main() {
         let source = format!(
             r#"1 ICON "{}"
 1 VERSIONINFO
- FILEVERSION 0,1,0,0
- PRODUCTVERSION 0,1,0,0
+ FILEVERSION {numeric_version}
+ PRODUCTVERSION {numeric_version}
  FILEFLAGSMASK 0x3fL
  FILEFLAGS 0
  FILEOS 0x40004L
@@ -30,8 +40,8 @@ BEGIN
   BEGIN
    VALUE "FileDescription", "{product}\0"
    VALUE "ProductName", "{product}\0"
-   VALUE "FileVersion", "0.1.0\0"
-   VALUE "ProductVersion", "0.1.0\0"
+   VALUE "FileVersion", "{version}\0"
+   VALUE "ProductVersion", "{version}\0"
    VALUE "InternalName", "stutter-watch\0"
    VALUE "OriginalFilename", "stutter-watch.exe\0"
   END
@@ -42,7 +52,8 @@ BEGIN
  END
 END
 "#,
-            icon.display().to_string().replace('\\', "/")
+            icon.display().to_string().replace('\\', "/"),
+            numeric_version = parts.join(",")
         );
         let mut encoded = vec![0xff, 0xfe];
         encoded.extend(source.encode_utf16().flat_map(u16::to_le_bytes));
