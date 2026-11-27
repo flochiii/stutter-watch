@@ -10,10 +10,10 @@ Direct runtime dependencies, checked against the locked Cargo metadata:
 | [chrono](https://github.com/chronotope/chrono) | 0.4.45 | MIT OR Apache-2.0 |
 | [clap](https://github.com/clap-rs/clap) | 4.6.10 | MIT OR Apache-2.0 |
 | [lz4_flex](https://github.com/pseitz/lz4_flex) | 0.14.2 | MIT |
-| [nvml-wrapper](https://github.com/Cldfire/nvml-wrapper) | 0.11.0 | MIT OR Apache-2.0 |
+| [nvml-wrapper](https://github.com/rust-nvml/nvml-wrapper) | 0.13.0 | MIT OR Apache-2.0 |
 | [serde](https://github.com/serde-rs/serde) | 1.0.229 | MIT OR Apache-2.0 |
 | [serde_json](https://github.com/serde-rs/json) | 1.0.154 | MIT OR Apache-2.0 |
-| [toml](https://github.com/toml-rs/toml) | 0.9.12+spec-1.1.0 | MIT OR Apache-2.0 |
+| [toml](https://github.com/toml-rs/toml) | 1.2.2+spec-1.1.0 | MIT OR Apache-2.0 |
 | [windows](https://github.com/microsoft/windows-rs) | 0.62.2 | MIT OR Apache-2.0 |
 
 `OR` identifies an upstream choice of license, not a requirement to apply both. The development-only compression probe also uses `flate2` and `zstd`; test helpers use `tempfile`. Windows release archives include a target-specific normal/build dependency inventory in `licenses/dependencies.json`, the upstream notices for every listed package, and Rust library copyright/license files in `licenses/rust`. The packaging script stops if a package has no license declaration or notice file. Windows system libraries and NVIDIA drivers/NVML are supplied separately by their vendors; they are not bundled here.

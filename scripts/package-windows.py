@@ -44,6 +44,9 @@ def main():
 
     # An explicit target keeps these flags away from host proc-macro crates.
     env = os.environ.copy()
+    for key in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS"):
+        env.pop(key, None)
+    env["CARGO_TARGET_DIR"] = str(ROOT / "target")
     env["CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS"] = "-C target-feature=+crt-static"
     subprocess.run(["cargo", "build", "--locked", "--release", "--target", TARGET],
                    cwd=ROOT, env=env, check=True)
