@@ -16,7 +16,7 @@ Direct runtime dependencies, checked against the locked Cargo metadata:
 | [toml](https://github.com/toml-rs/toml) | 0.9.12+spec-1.1.0 | MIT OR Apache-2.0 |
 | [windows](https://github.com/microsoft/windows-rs) | 0.62.2 | MIT OR Apache-2.0 |
 
-`OR` identifies an upstream choice of license, not a requirement to apply both. The development-only compression probe also uses `flate2` and `zstd`; test helpers use `tempfile`. A future binary distribution must include the applicable license notices for its full transitive dependency inventory. Windows system libraries and NVIDIA drivers/NVML are supplied separately by their vendors; they are not bundled here.
+`OR` identifies an upstream choice of license, not a requirement to apply both. The development-only compression probe also uses `flate2` and `zstd`; test helpers use `tempfile`. Windows release archives include a target-specific normal/build dependency inventory in `licenses/dependencies.json`, the upstream notices for every listed package, and Rust library copyright/license files in `licenses/rust`. The packaging script stops if a package has no license declaration or notice file. Windows system libraries and NVIDIA drivers/NVML are supplied separately by their vendors; they are not bundled here.
 
 The compression notices below are retained for convenience. No source files from the reference monitor repositories were copied.
 
