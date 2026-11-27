@@ -114,10 +114,15 @@ def main():
                  "license": "PolyForm-Noncommercial-1.0.0",
                  "source": f"https://github.com/flochiii/stutter-watch/tree/{commit}"}
         (stage / "BUILD.json").write_text(json.dumps(build, indent=2) + "\n", encoding="utf-8")
-        with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
+        # Registry archives can carry Unix-epoch mtimes, outside ZIP's date range.
+        temporary_archive = Path(temporary) / archive.name
+        with zipfile.ZipFile(temporary_archive, "x", compression=zipfile.ZIP_DEFLATED,
+                             compresslevel=9, strict_timestamps=False) as bundle:
             for path in sorted(stage.rglob("*")):
                 if path.is_file():
                     bundle.write(path, path.relative_to(stage.parent).as_posix())
+        with archive.open("xb") as destination, temporary_archive.open("rb") as source:
+            shutil.copyfileobj(source, destination)
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     checksum.write_text(f"{digest}  {archive.name}\n", encoding="ascii")
     print(json.dumps({"archive": str(archive), "sha256": digest,
