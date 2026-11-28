@@ -1,0 +1,3 @@
+-keep class io.github.flochiii.stutterwatch.NativeCore { *; }
+-keep class io.github.flochiii.stutterwatch.ShizukuStatsService { *; }
+-keep class io.github.flochiii.stutterwatch.RootStatsService { *; }

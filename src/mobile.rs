@@ -34,7 +34,10 @@ pub struct Metrics {
     pub gpu_temperature_c: Option<f64>,
     pub fps: Option<f64>,
     pub frame_ms: Option<f64>,
+    pub frame_duration_ms: Option<f64>,
     pub frame_source: String,
+    pub fps_sample_elapsed_ms: Option<u64>,
+    pub fps_task_id: Option<i32>,
     pub deadline_misses: u64,
     pub deadline_source: String,
     pub target_package: String,
@@ -139,6 +142,7 @@ pub struct Session {
     frames: FrameTracker,
     previous_elapsed: Option<u64>,
     finished: bool,
+    started: bool,
 }
 
 impl Session {
@@ -178,13 +182,9 @@ impl Session {
             frames: FrameTracker::default(),
             previous_elapsed: None,
             finished: false,
+            started: false,
         };
         session.restore()?;
-        session.recorder.append(Record::Event {
-            ts_ms: now_ms(),
-            name: "android_session".into(),
-            detail: "clock=elapsed_realtime; platform=android".into(),
-        });
         Ok(session)
     }
 
@@ -226,6 +226,7 @@ impl Session {
                 json!({})
             }
             "snapshot" => self.snapshot(),
+            "latest" => self.latest(),
             "mark" => {
                 let marked = self.detector.mark("manual_mark");
                 if let Some(pending) = &self.detector.pending {
@@ -236,6 +237,22 @@ impl Session {
             "flush" => {
                 self.flush();
                 self.recorder.barrier()?;
+                json!({})
+            }
+            "configure" => {
+                let open: Open = serde_json::from_str(payload)?;
+                ensure!(
+                    open.directory == self.config.logs_dir,
+                    "Recording directory cannot change while open"
+                );
+                ensure!(
+                    (10..=4096).contains(&open.budget_mb)
+                        && (1..=168).contains(&open.retention_hours),
+                    "Invalid history limits"
+                );
+                self.config.history.ordinary_budget_bytes = open.budget_mb * 1024 * 1024;
+                self.config.history.retention_hours = open.retention_hours;
+                self.recorder.configure(&self.config);
                 json!({})
             }
             "gap" => {
@@ -294,12 +311,21 @@ impl Session {
             input.cpu_pct,
             input.android.fps,
             input.android.frame_ms,
+            input.android.frame_duration_ms,
             input.android.battery_pct,
             input.android.battery_temperature_c,
             input.android.cpu_headroom,
             input.android.gpu_headroom,
         ] {
             ensure!(value.is_none_or(f64::is_finite), "Non-finite metric");
+        }
+        if !self.started {
+            self.started = true;
+            self.recorder.append(Record::Event {
+                ts_ms: input.ts_ms,
+                name: "android_session".into(),
+                detail: "clock=elapsed_realtime; platform=android".into(),
+            });
         }
         let interval = self
             .previous_elapsed
@@ -310,7 +336,18 @@ impl Session {
             self.detector.clear_history();
         }
         self.previous_elapsed = Some(input.elapsed_ms);
-        input.android.fps = None;
+        if input.android.frame_source != "android_task_fps"
+            || input
+                .android
+                .fps_sample_elapsed_ms
+                .is_none_or(|ts| ts > input.elapsed_ms || input.elapsed_ms - ts > 3000)
+            || input
+                .android
+                .fps
+                .is_some_and(|v| !(0.0..=1000.0).contains(&v))
+        {
+            input.android.fps = None;
+        }
         input.android.frame_ms = None;
         if let Some(text) = &input.frame_stats
             && let Some((fps, frame_ms)) =
@@ -387,6 +424,12 @@ impl Session {
             "status": self.history.back().map(|s| &s.source_status), "writer": self.recorder.status(),
             "latest": self.history.back().map(|s| self.point(s)), "pending": self.detector.pending.as_ref().map(|p| &p.header)})
     }
+    fn latest(&self) -> Value {
+        json!({"status": self.history.back().map(|s| &s.source_status),
+            "writer": self.recorder.status(),
+            "latest": self.history.back().map(|s| self.point(s)),
+            "pending": self.detector.pending.as_ref().map(|p| &p.header)})
+    }
     fn incidents(&self) -> Result<Vec<Incident>> {
         let mut files = storage::managed_files(&self.config.logs_dir)?;
         files.sort_by_key(|(_, modified, _)| std::cmp::Reverse(*modified));
@@ -455,6 +498,13 @@ mod tests {
         s.android.as_mut().unwrap().frame_ms = Some(1000.0);
         assert!(assessment::reasons(&Config::default(), &s).is_empty());
         s.android.as_mut().unwrap().deadline_misses = 1;
+        s.android.as_mut().unwrap().frame_duration_ms = Some(24.0);
+        assert!(assessment::reasons(&Config::default(), &s).is_empty());
+        assert_eq!(
+            assessment::signals(&Config::default(), &s),
+            assessment::FRAME_JANK
+        );
+        s.android.as_mut().unwrap().frame_duration_ms = Some(150.0);
         assert_eq!(
             assessment::reasons(&Config::default(), &s),
             vec!["android_frame_jank"]

@@ -381,7 +381,11 @@ pub fn free_bytes(path: &Path) -> Result<u64> {
         return Err(std::io::Error::last_os_error().into());
     }
     let info = unsafe { info.assume_init() };
-    Ok(info.f_bavail.saturating_mul(info.f_frsize))
+    #[cfg(target_pointer_width = "32")]
+    let available = u64::from(info.f_bavail).saturating_mul(u64::from(info.f_frsize));
+    #[cfg(target_pointer_width = "64")]
+    let available = info.f_bavail.saturating_mul(info.f_frsize);
+    Ok(available)
 }
 
 pub fn managed_files(root: &Path) -> Result<Vec<(PathBuf, SystemTime, u64)>> {

@@ -13,6 +13,7 @@ pub const CPU_STALL: u16 = 512;
 pub const MEMORY_STALL: u16 = 1024;
 pub const IO_STALL: u16 = 2048;
 pub const THERMAL: u16 = 4096;
+pub const FRAME_JANK: u16 = 8192;
 pub const DELAYS: u16 = PRESENT | WINDOW | DWM;
 
 pub fn conclusion_key(flags: u16) -> &'static str {
@@ -43,7 +44,12 @@ pub fn signals(c: &Config, s: &Sample) -> u16 {
             flags |= THERMAL;
         }
         if android.deadline_misses > 0 {
-            flags |= PRESENT;
+            // A missed 16 ms deadline is an observation, not automatically a freeze.
+            flags |= if android.frame_duration_ms.is_some_and(|ms| ms >= 100.0) {
+                PRESENT
+            } else {
+                FRAME_JANK
+            };
         }
         return flags;
     }

@@ -20,6 +20,10 @@ Direct runtime dependencies, checked against the locked Cargo metadata:
 
 The compression notices below are retained for convenience. No source files from the reference monitor repositories were copied.
 
+## Android components
+
+The Android application also uses AndroidX and Jetpack Compose (Apache-2.0), the Kotlin standard library and coroutines (Apache-2.0), [Shizuku API 13.1.5](https://github.com/RikkaApps/Shizuku-API) (Apache-2.0), [libsu 6.0.0](https://github.com/topjohnwu/libsu) (Apache-2.0), and the Gradle wrapper (Apache-2.0). JNI 0.21.1 and jni-sys retain their upstream MIT/Apache-2.0 license choices. Exact Android versions are declared in `android/app/build.gradle.kts`; Rust versions are locked in `Cargo.lock`. Shizuku itself and root managers are installed separately and are not bundled with Stutter Watch.
+
 
 ## lz4_flex-0.14.2
 
