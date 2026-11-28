@@ -97,7 +97,10 @@ jobs:
       - name: Exercise portable AppImage desktop lifetime
         run: |
           export APPIMAGE_EXTRACT_AND_RUN=1
-          export STUTTER_WATCH_TEST_EXECUTABLE="$PWD/target/dist-linux/stutter-watch-$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb'))['package']['version'])")-linux-x64.AppImage"
+          appimages=("$PWD"/target/dist-linux/*-linux-x64.AppImage)
+          test "${#appimages[@]}" -eq 1
+          test -x "${appimages[0]}"
+          export STUTTER_WATCH_TEST_EXECUTABLE="${appimages[0]}"
           export STUTTER_WATCH_TEST_OUTPUT="$PWD/target/linux-evidence/appimage"
           dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-linux.py
       - name: Exercise native Wayland

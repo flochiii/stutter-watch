@@ -37,7 +37,7 @@ def main():
             time.sleep(.5)
         assert window, "No Linux app window appeared"
         run("xdotool", "windowactivate", "--sync", window)
-        time.sleep(18)
+        time.sleep(75)
         def click(x, y):
             run("xdotool", "mousemove", "--window", window, x, y, "click", "1")
             time.sleep(1)
