@@ -1,80 +1,75 @@
-<p align="center"><img src="assets/app.svg" width="80" height="80" alt="Stutter Watch icon"></p>
+<p align="center"><img src="assets/app.svg" width="72" height="72" alt="Stutter Watch icon"></p>
 
 <h1 align="center">Stutter Watch</h1>
 
-<p align="center">Catch intermittent Windows stutters. Keep the context. Inspect it locally.</p>
+<p align="center">Record intermittent stutters. Keep the context. Inspect it locally.</p>
 
 [![Windows CI](https://github.com/flochiii/stutter-watch/actions/workflows/ci.yml/badge.svg)](https://github.com/flochiii/stutter-watch/actions/workflows/ci.yml)
+[![Linux CI](https://github.com/flochiii/stutter-watch/actions/workflows/linux.yml/badge.svg)](https://github.com/flochiii/stutter-watch/actions/workflows/linux.yml)
 [![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-6a9ed8)](LICENSE)
-![Windows x64](https://img.shields.io/badge/platform-Windows%20x64-555)
-![Rust 1.97+](https://img.shields.io/badge/Rust-1.97%2B-b7410e)
+![Windows and Linux x64](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20x64-555)
 
-Stutter Watch is a native Windows performance recorder written in Rust. It keeps a rolling history while you work, saves the time around a manual bookmark or an automatic signal, and opens the recording in local charts. It is designed for brief UI freezes that are difficult to reproduce on demand.
+Stutter Watch is a local performance recorder for Windows and Linux, written in Rust. It keeps a rolling history while you work and preserves the time around a bookmark or an automatic signal. Reopen the desktop panel to inspect charts and incidents without sending recordings anywhere.
 
-[Getting started](docs/GETTING_STARTED.md) · [Data & privacy](docs/DATA_AND_PRIVACY.md) · [Roadmap](docs/ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [License](LICENSE)
+[Downloads](https://github.com/flochiii/stutter-watch/releases) · [Windows guide](docs/WINDOWS_PORTABLE.md) · [Linux guide](docs/LINUX.md) · [Data & privacy](docs/DATA_AND_PRIVACY.md) · [Contributing](CONTRIBUTING.md)
 
-> **Windows preview:** [download v0.1.0](https://github.com/flochiii/stutter-watch/releases/tag/v0.1.0). Extract the ZIP and open **stutter-watch.exe**. A detected incident is evidence to inspect, not a proven explanation for a visible freeze.
+![Stutter Watch Linux desktop](docs/images/linux-monitor.png)
 
-The portable build needs no Rust installation. Configuration and recordings stay beside the executable. See the [Windows quick start](docs/WINDOWS_PORTABLE.md) for checksums, permissions, and updates. The executable is currently unsigned.
+*Actual Linux desktop captured in an isolated X11 test. Available GPU measurements depend on the machine and driver.*
 
-## What it does
+## Downloads and installation
 
-- **Four local charts:** CPU/RAM, disk latency, measured Present API work/window response, and DPC/ISR activity. Reopening the monitor restores up to ten minutes of collected history.
-- **Protected bookmarks:** press **Ctrl+Shift+F12** to preserve the preceding 30 seconds and following 10 seconds. Manual captures survive ordinary history rotation.
-- **Automatic signals:** highlight high load in yellow and measured delays or critical memory pressure in red. Each incident includes a short assessment and peak values.
-- **Selectable collection:** choose CPU, memory, disks, process summaries, window response, GPU, ETW events, and other sources. Display toggles and collection controls are separate.
-- **Bounded ordinary history:** default 24-hour retention and a 500 MB budget, whichever limit is reached first. Choose full selected samples with LZ4 compression or a smaller, lossy summary mode.
-- **Tray operation:** closing the panel keeps recording. Choose the metrics shown in its live hover panel. English is the default interface language; ten language catalogs are included.
+**v0.2 is being validated.** It adds a per-user Windows installer and Linux `.deb`, `.rpm` and AppImage packages. Verified downloads will be attached to the release after validation. The earlier [v0.1 Windows preview](https://github.com/flochiii/stutter-watch/releases/tag/v0.1.0) is a portable ZIP: extract it and open `stutter-watch.exe`.
 
-## Build and try it
+The Windows installer preserves settings and recordings during updates. Linux packages require x86_64 and glibc 2.35 or later. See the platform guides for desktop dependencies, permissions, checksums and startup behavior. Windows executables are unsigned.
 
-Requirements: **Windows x64**, **Rust 1.97 or later** using the MSVC toolchain, **Visual Studio Build Tools with C++ support**, and the **Windows SDK**. Windows 11 has been exercised locally; broader Windows 10/11 coverage is still needed.
+## Everyday use
 
-```powershell
-git clone https://github.com/flochiii/stutter-watch.git
-cd stutter-watch
+1. Open Stutter Watch and leave the recorder running while you work.
+2. When you notice a freeze, press **Ctrl+Shift+F12** or **Mark stutter**. The bookmark preserves 30 seconds before it and requests ten seconds afterward.
+3. Open **Incidents** to inspect the recording. Your own recordings appear automatically. Closing the panel keeps the recorder running; reopening restores up to ten minutes of history.
+
+Ordinary history defaults to **500 MB / 24 hours**, whichever limit is reached first. Protected bookmarks survive ordinary history rotation. Choose lossless LZ4 history or smaller, lossy summaries with full incident captures. **Quit** stops the recorder and saves pending data.
+
+## Features and sources
+
+| Capability | Windows | Linux |
+| --- | --- | --- |
+| Local charts, protected bookmarks, compressed history and reports | Yes | Yes |
+| Selectable CPU, RAM, disk and process collection | Yes | Yes |
+| Configurable tray and global bookmark shortcut | Native tray / hotkey | StatusNotifierItem / X11 or Wayland portal |
+| GPU activity and guarded details | Windows counters / NVML | DRM fdinfo / sysfs / guarded NVML |
+| Present API work, DPC/ISR and window-response probes | ETW / Win32 | Provider unavailable; explained in Data |
+| Resource pressure stalls | Platform counters | Kernel PSI |
+| Optional local MangoHud CSV viewing | Yes | Yes |
+
+New shared workflows are implemented on both platforms. Provider-specific measurements retain their actual meaning. High CPU utilization alone is not a stutter; yellow marks load pressure and red marks measured delays or critical resource signals. An annotation is evidence to inspect, not proof of a cause. Missing measurements stay unavailable.
+
+The optional MangoHud import opens an existing game log in the same incident viewer. It is unnecessary for Stutter Watch's own recordings and does not enable live game FPS collection. Imported frame time uses a relative timeline rather than an invented system timestamp.
+
+![Stutter Watch collection settings](docs/images/linux-data.png)
+
+*Choose what to collect. Hover an information icon for its purpose and availability reason. English defaults and ten interface languages are included.*
+
+## Your data
+
+No accounts, analytics or automatic log uploads. Window titles are off by default; process names and PIDs can still identify applications. Review recordings before sharing them. Protected captures have separate usage and are not automatically deleted. Read [data and retention](docs/DATA_AND_PRIVACY.md) for storage locations and limits.
+
+## Build and test
+
+Use **Rust 1.97.1**. Windows needs MSVC C++ Build Tools and Windows SDK; Linux build dependencies are listed in the [Linux guide](docs/LINUX.md).
+
+```sh
 cargo build --locked --release
-Copy-Item config.example.toml config.toml
-.\target\release\stutter-watch.exe --config .\config.toml --panel
-```
-
-1. Leave the recorder running while you work.
-2. When you notice a stutter, press **Ctrl+Shift+F12**. Allow another ten seconds for the capture to finish.
-3. Open **Incidents** and inspect the time around the bookmark. The latest recording is selected automatically.
-
-Run without administrator privileges first. Some ETW sources need elevation or appropriate Windows permissions; an unavailable source shows its reason in **Data** while other sources continue. NVIDIA sensors are gated by confirmed activity and power-state checks to avoid polling an idle discrete GPU unnecessarily.
-
-The tray menu provides pause, bookmark, report, and exit. **X closes only the panel.** Use **Quit** or `shutdown` to stop recording. See [the guide](docs/GETTING_STARTED.md) for background startup, updates, and troubleshooting.
-
-## Understand the evidence
-
-High CPU use alone is not a stutter. Present API duration is not display scan-out latency, and a window-response probe is not the end-to-end time of every click. Missing or disabled measurements appear as unavailable rather than a fabricated zero. Idle frame gaps, lock/sleep, and stale events are filtered from automatic delay detection.
-
-Stutter Watch complements [PresentMon](https://github.com/GameTechDev/PresentMon) and [Windows Performance Recorder/Analyzer](https://learn.microsoft.com/en-us/windows-hardware/test/wpt/). It does not replace their frame correlation or stack-level analysis. See [architecture and limits](docs/ARCHITECTURE.md).
-
-## Your data stays on your machine
-
-The recorder has no analytics, accounts, or automatic log upload. Window titles are off by default; process names and PIDs can still identify applications. Protected captures have their own storage usage and are not automatically deleted. Review any capture before sharing it publicly.
-
-Read [data, retention, and privacy](docs/DATA_AND_PRIVACY.md) before leaving it running for a long time or attaching diagnostic files to an issue.
-
-## Development
-
-```powershell
 cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
-cargo build --locked --release
 ```
 
-A Windows CI workflow is included for these checks. Tests cover storage fidelity and retention, protected capture windows, source selection, configuration migration, chart history, missing measurements, and native popup lifetime. Unit tests do not establish detection accuracy across every driver, game, or Windows configuration.
+CI verifies Windows installation, updates and rollback, and launches Linux under X11 and native Wayland. Screenshots come from the running application. [Release tooling](docs/RELEASING.md) builds installable packages, checksums and dependency notices. Hardware and desktop coverage still depend on real-world testing; CI is not a guarantee for every driver or game.
 
-For an isolated development recorder, use `scripts/run-dev.ps1` after building. It stores test data in `.verification/` and uses **Ctrl+Alt+Shift+F11** to avoid the usual bookmark shortcut.
-
-Useful next contributions: reproduce a UI bug, review a translation, or test source availability on another GPU. See [CONTRIBUTING.md](CONTRIBUTING.md), [open issues](https://github.com/flochiii/stutter-watch/issues), and the [roadmap](docs/ROADMAP.md).
+[Architecture and limits](docs/ARCHITECTURE.md) · [Roadmap](docs/ROADMAP.md) · [Report an issue](https://github.com/flochiii/stutter-watch/issues)
 
 ## License
 
-Stutter Watch is available under the [PolyForm Noncommercial License 1.0.0](LICENSE). Personal study, experiments, hobby projects, and the other permitted uses are covered by its terms. Commercial uses outside the license's permitted purposes require separate permission from the copyright holder. Read the full license for its requirements and provisions for noncommercial organizations.
-
-Dependencies retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
+Stutter Watch is available under [PolyForm Noncommercial 1.0.0](LICENSE). Commercial uses outside its permitted purposes require separate permission from the copyright holder. Dependencies retain their own terms; see [third-party notices](THIRD_PARTY_NOTICES.md).
