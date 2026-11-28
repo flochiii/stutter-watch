@@ -263,12 +263,14 @@ pub fn main() -> Result<()> {
             "--self-test must be 1..3600 seconds"
         );
     }
-    let path = cli
-        .config
-        .unwrap_or(xdg("XDG_CONFIG_HOME", ".config")?.join("config.toml"));
+    let default_config = cli.config.is_none();
+    let path = match cli.config {
+        Some(path) => path,
+        None => xdg("XDG_CONFIG_HOME", ".config")?.join("config.toml"),
+    };
     let fresh = !path.exists();
     let mut config = Config::load(&path)?;
-    if fresh {
+    if fresh && default_config {
         config.logs_dir = xdg("XDG_STATE_HOME", ".local/state")?.join("logs");
         config.save(&path)?;
     }

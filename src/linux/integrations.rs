@@ -173,7 +173,7 @@ impl ksni::Tray for Tray {
         vec![
             ksni::menu::StandardItem {
                 label: t.get("live").into(),
-                activate: Box::new(|s| {
+                activate: Box::new(|s: &mut Tray| {
                     let _ = open_panel(&s.config);
                 }),
                 ..Default::default()
@@ -181,7 +181,7 @@ impl ksni::Tray for Tray {
             .into(),
             ksni::menu::StandardItem {
                 label: t.get("mark").into(),
-                activate: Box::new(|s| {
+                activate: Box::new(|s: &mut Tray| {
                     let _ = rpc(&s.config, "mark");
                 }),
                 ..Default::default()
@@ -189,7 +189,7 @@ impl ksni::Tray for Tray {
             .into(),
             ksni::menu::StandardItem {
                 label: pause,
-                activate: Box::new(|s| {
+                activate: Box::new(|s: &mut Tray| {
                     let _ = rpc(&s.config, "pause");
                 }),
                 ..Default::default()
@@ -198,7 +198,7 @@ impl ksni::Tray for Tray {
             ksni::MenuItem::Separator,
             ksni::menu::StandardItem {
                 label: t.get("quit").into(),
-                activate: Box::new(|s| {
+                activate: Box::new(|s: &mut Tray| {
                     let _ = rpc(&s.config, "shutdown");
                 }),
                 ..Default::default()

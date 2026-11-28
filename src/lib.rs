@@ -8,6 +8,7 @@ pub mod detector;
 pub mod history;
 pub mod hotkey;
 pub mod i18n;
+pub mod mangohud;
 pub mod model;
 pub mod procfs;
 pub mod recorder;

@@ -223,7 +223,7 @@ impl Worker {
                             .flags(InitFlags::NO_GPUS | InitFlags::NO_ATTACH)
                             .init()
                         {
-                            if let Ok(gpu) = nvml.device_by_pci_bus_id(&pci) {
+                            if let Ok(gpu) = nvml.device_by_pci_bus_id(pci.as_str()) {
                                 let memory = gpu.memory_info().ok();
                                 adapter.nvml = Some(NvmlMetrics {
                                     core_mhz: gpu.clock_info(Clock::Graphics).ok(),

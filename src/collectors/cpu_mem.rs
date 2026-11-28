@@ -387,20 +387,16 @@ impl CpuMem {
                     } else {
                         0
                     },
-                    private_bytes: if selection.process_memory {
-                        p.private_bytes as u64
-                    } else {
-                        0
-                    },
+                    private_bytes: selection.process_memory.then_some(p.private_bytes as u64),
                     io_read_bytes_sec: prior
-                        .map(|old| delta(current.read, old.read))
-                        .unwrap_or(0.0),
+                        .filter(|_| selection.process_io)
+                        .map(|old| delta(current.read, old.read)),
                     io_write_bytes_sec: prior
-                        .map(|old| delta(current.write, old.write))
-                        .unwrap_or(0.0),
+                        .filter(|_| selection.process_io)
+                        .map(|old| delta(current.write, old.write)),
                     page_faults_sec: prior
-                        .map(|old| current.faults.wrapping_sub(old.faults) as f64 / seconds)
-                        .unwrap_or(0.0),
+                        .filter(|_| selection.process_memory)
+                        .map(|old| current.faults.wrapping_sub(old.faults) as f64 / seconds),
                     hard_page_faults_sec: prior
                         .filter(|_| selection.process_memory)
                         .map(|old| p.hard_faults.wrapping_sub(old.hard_faults) as f64 / seconds),

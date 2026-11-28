@@ -197,7 +197,9 @@ fn analyze_file(
                 }
             }
             for p in &sample.disk.top {
-                if p.io_read_bytes_sec + p.io_write_bytes_sec > 1_048_576.0 {
+                if p.io_read_bytes_sec.unwrap_or(0.0) + p.io_write_bytes_sec.unwrap_or(0.0)
+                    > 1_048_576.0
+                {
                     candidates.insert(format!("{} (I/O)", p.name));
                 }
             }

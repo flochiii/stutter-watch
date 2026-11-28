@@ -366,8 +366,10 @@ impl Procfs {
                         old.and_then(|v| v.2).zip(io).filter(|_| interval_ms > 0)
                         && let Some((r, w)) = br.checked_sub(ar).zip(bw.checked_sub(aw))
                     {
-                        value.process.io_read_bytes_sec = r as f64 * 1000.0 / interval_ms as f64;
-                        value.process.io_write_bytes_sec = w as f64 * 1000.0 / interval_ms as f64;
+                        value.process.io_read_bytes_sec =
+                            Some(r as f64 * 1000.0 / interval_ms as f64);
+                        value.process.io_write_bytes_sec =
+                            Some(w as f64 * 1000.0 / interval_ms as f64);
                         io_rows.push(value.process.clone());
                     }
                     current.insert(pid, (value.start, value.ticks, io));
@@ -388,7 +390,9 @@ impl Procfs {
                 s.memory.top = top(&rows, |p| p.working_set_bytes as f64);
             }
             if c.collection.process_io {
-                s.disk.top = top(&io_rows, |p| p.io_read_bytes_sec + p.io_write_bytes_sec);
+                s.disk.top = top(&io_rows, |p| {
+                    p.io_read_bytes_sec.unwrap_or(0.0) + p.io_write_bytes_sec.unwrap_or(0.0)
+                });
             }
         }
         for name in ["frames", "dpc", "dpc_events", "boot", "window_response"] {

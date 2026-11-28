@@ -37,7 +37,7 @@ pub fn collect(values: &Values, processes: &[Process], limit: usize) -> Disk {
             .collect(),
         top: top_n(
             processes,
-            |p| p.io_read_bytes_sec + p.io_write_bytes_sec,
+            |p| p.io_read_bytes_sec.unwrap_or(0.0) + p.io_write_bytes_sec.unwrap_or(0.0),
             limit,
         ),
     }

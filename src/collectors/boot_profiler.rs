@@ -54,7 +54,8 @@ impl Profiler {
                 already_running: process.created_ms < self.started_ms,
                 ..Default::default()
             });
-            let io = process.io_read_bytes_sec + process.io_write_bytes_sec;
+            let io = process.io_read_bytes_sec.unwrap_or(0.0)
+                + process.io_write_bytes_sec.unwrap_or(0.0);
             if is_new || process.cpu_pct > entry.peak_cpu_pct || io > entry.peak_io_bytes_sec {
                 entry.peak_cpu_pct = entry.peak_cpu_pct.max(process.cpu_pct);
                 entry.peak_io_bytes_sec = entry.peak_io_bytes_sec.max(io);

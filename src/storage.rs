@@ -586,7 +586,7 @@ pub fn summarize(samples: &[&Sample]) -> Option<Summary> {
         top_memory: combine(|s| &s.memory.top, |p| p.working_set_bytes as f64),
         top_io: combine(
             |s| &s.disk.top,
-            |p| p.io_read_bytes_sec + p.io_write_bytes_sec,
+            |p| p.io_read_bytes_sec.unwrap_or(0.0) + p.io_write_bytes_sec.unwrap_or(0.0),
         ),
         gpu_transitions: samples
             .iter()

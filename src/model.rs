@@ -19,11 +19,11 @@ pub struct Process {
     pub threads: u32,
     pub base_priority: i32,
     pub working_set_bytes: u64,
-    pub private_bytes: u64,
-    pub io_read_bytes_sec: f64,
-    pub io_write_bytes_sec: f64,
+    pub private_bytes: Option<u64>,
+    pub io_read_bytes_sec: Option<f64>,
+    pub io_write_bytes_sec: Option<f64>,
     /// Includes soft faults. Windows does not expose per-process hard faults in this counter.
-    pub page_faults_sec: f64,
+    pub page_faults_sec: Option<f64>,
     pub hard_page_faults_sec: Option<f64>,
 }
 
@@ -312,6 +312,18 @@ pub struct Incident {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Record {
+    ExternalLog {
+        source: String,
+        basename: String,
+        sha256: String,
+        imported_ms: u64,
+        time_basis: String,
+    },
+    ExternalFrame {
+        elapsed_ns: u64,
+        fps: f64,
+        frametime_ms: f64,
+    },
     Session {
         ts_ms: u64,
         version: String,
