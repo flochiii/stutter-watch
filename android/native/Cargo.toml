@@ -1,0 +1,15 @@
+[package]
+name = "stutter-watch-android"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "PolyForm-Noncommercial-1.0.0"
+
+[lib]
+name = "stutter_android"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+stutter-watch = { path = "../.." }
+serde_json = "1"
+jni = "0.21"

@@ -214,6 +214,8 @@ pub struct Boot {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Sample {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub android: Option<crate::mobile::Metrics>,
     pub ts_ms: u64,
     pub elapsed_ms: u64,
     pub uptime_ms: u64,

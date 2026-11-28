@@ -372,7 +372,7 @@ pub fn free_bytes(path: &Path) -> Result<u64> {
     Ok(available)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub fn free_bytes(path: &Path) -> Result<u64> {
     use std::os::unix::ffi::OsStrExt;
     let name = std::ffi::CString::new(path.as_os_str().as_bytes())?;

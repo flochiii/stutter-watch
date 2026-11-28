@@ -10,6 +10,11 @@ readme = "README.md"
 keywords = ["windows", "stutter", "etw", "diagnostics", "performance"]
 categories = ["command-line-utilities"]
 
+[workspace]
+members = ["android/native"]
+default-members = ["."]
+resolver = "3"
+
 [dependencies]
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
@@ -17,10 +22,15 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 toml = "1.2"
-nvml-wrapper = "0.13"
 lz4_flex = { version = "0.14", default-features = false, features = ["std", "frame"] }
 csv = "1"
 sha2 = "0.10"
+
+[target.'cfg(any(windows, target_os = "linux"))'.dependencies]
+nvml-wrapper = "0.13"
+
+[target.'cfg(target_os = "android")'.dependencies]
+libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"

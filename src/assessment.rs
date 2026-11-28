@@ -12,12 +12,13 @@ pub const DWM: u16 = 256;
 pub const CPU_STALL: u16 = 512;
 pub const MEMORY_STALL: u16 = 1024;
 pub const IO_STALL: u16 = 2048;
+pub const THERMAL: u16 = 4096;
 pub const DELAYS: u16 = PRESENT | WINDOW | DWM;
 
 pub fn conclusion_key(flags: u16) -> &'static str {
     if flags & DELAYS != 0 {
         "analysis_delay_detected"
-    } else if flags & (RAM_LOW | DISK | DPC | DRIVER | MEMORY_STALL | IO_STALL) != 0 {
+    } else if flags & (RAM_LOW | DISK | DPC | DRIVER | MEMORY_STALL | IO_STALL | THERMAL) != 0 {
         "analysis_resource_alert"
     } else if flags & (CPU_BUSY | RAM_BUSY | CPU_STALL) != 0 {
         "analysis_pressure_only"
@@ -29,6 +30,22 @@ pub fn conclusion_key(flags: u16) -> &'static str {
 pub fn signals(c: &Config, s: &Sample) -> u16 {
     if s.interactive == Some(false) || s.interval_ms > 3_000 {
         return 0;
+    }
+    if let Some(android) = &s.android {
+        let mut flags = 0;
+        if s.cpu.usage_pct.is_some_and(|v| v >= 95.0) {
+            flags |= CPU_BUSY;
+        }
+        if android.low_memory == Some(true) {
+            flags |= RAM_LOW;
+        }
+        if android.thermal_status.is_some_and(|v| v >= 3) {
+            flags |= THERMAL;
+        }
+        if android.deadline_misses > 0 {
+            flags |= PRESENT;
+        }
+        return flags;
     }
     let ram_pct = (s.memory.total_bytes > 0)
         .then(|| s.memory.used_bytes as f64 / s.memory.total_bytes as f64 * 100.0);
@@ -109,6 +126,16 @@ pub fn reasons(c: &Config, s: &Sample) -> Vec<&'static str> {
         return Vec::new();
     }
     let flags = signals(c, s);
+    if s.android.is_some() {
+        return [
+            (PRESENT, "android_frame_jank"),
+            (RAM_LOW, "memory_pressure"),
+            (THERMAL, "android_thermal"),
+        ]
+        .into_iter()
+        .filter_map(|(flag, reason)| (flags & flag != 0).then_some(reason))
+        .collect();
+    }
     let mut reasons: Vec<_> = [
         (PRESENT, "present_block"),
         (DWM, "dwm_stall"),
