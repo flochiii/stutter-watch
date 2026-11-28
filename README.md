@@ -2,6 +2,12 @@
 <h1 align="center">Stutter Watch</h1>
 <p align="center">A local performance recorder for Windows and Linux.</p>
 
+[![Windows](https://github.com/flochiii/stutter-watch/actions/workflows/ci.yml/badge.svg)](https://github.com/flochiii/stutter-watch/actions/workflows/ci.yml)
+[![Linux](https://github.com/flochiii/stutter-watch/actions/workflows/linux.yml/badge.svg)](https://github.com/flochiii/stutter-watch/actions/workflows/linux.yml)
+[![Release](https://img.shields.io/github/v/release/flochiii/stutter-watch)](https://github.com/flochiii/stutter-watch/releases)
+[![Rust 1.97.1](https://img.shields.io/badge/Rust-1.97.1-orange?logo=rust)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/License-PolyForm%20Noncommercial-6a9ed8)](LICENSE)
+
 [Download](https://github.com/flochiii/stutter-watch/releases) · [Windows](docs/WINDOWS_PORTABLE.md) · [Linux](docs/LINUX.md) · [Documentation](docs/GETTING_STARTED.md)
 
 Stutter Watch records system activity in the background and saves the context around freezes. Open an incident to inspect its charts and measurements. No accounts or log uploads.
