@@ -309,3 +309,9 @@ pub enum Record {
         detail: String,
     },
 }
+
+pub fn top_processes(processes: &[Process], metric: impl Fn(&Process) -> f64) -> Vec<Process> {
+    let mut rows: Vec<_> = processes.iter().collect();
+    rows.sort_unstable_by(|a, b| metric(b).total_cmp(&metric(a)));
+    rows.into_iter().take(5).cloned().collect()
+}

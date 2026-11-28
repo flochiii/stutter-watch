@@ -1,8 +1,8 @@
 //! Bounded restoration of the graph's last ten minutes, independent of the UI.
 use crate::{
     config::Config,
+    dashboard::Point,
     model::{Record, Summary},
-    panel::Point,
 };
 use anyhow::Result;
 use std::{
@@ -98,7 +98,7 @@ fn summary_points(summary: &Summary, config: &Config) -> Vec<Point> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{model::*, panel::Dashboard, storage::Storage};
+    use crate::{dashboard::Dashboard, model::*, storage::Storage};
     use std::sync::Arc;
     #[test]
     fn closing_the_view_keeps_collecting_graph_history() {

@@ -352,9 +352,14 @@ fn ensure_same_bytes(source: &Path, compressed: &Path) -> Result<()> {
     Ok(())
 }
 
+#[cfg(windows)]
 pub fn free_bytes(path: &Path) -> Result<u64> {
     let absolute = path.canonicalize()?;
-    let wide = crate::collectors::pdh::wide(&absolute.to_string_lossy());
+    let wide: Vec<u16> = absolute
+        .to_string_lossy()
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
     let mut available = 0;
     unsafe {
         windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(
@@ -534,7 +539,7 @@ pub fn summarize(samples: &[&Sample]) -> Option<Summary> {
                 *entry = p.clone();
             }
         }
-        crate::collectors::cpu_mem::top(&map.into_values().collect::<Vec<_>>(), metric)
+        crate::model::top_processes(&map.into_values().collect::<Vec<_>>(), metric)
     };
     let mut boot = last.boot.clone();
     let mut processes = BTreeMap::new();

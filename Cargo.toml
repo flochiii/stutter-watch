@@ -1,9 +1,9 @@
 [package]
 name = "stutter-watch"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.97"
-description = "Native Windows stutter recorder with local charts, protected incident captures, and selectable ETW telemetry"
+description = "Desktop stutter recorder with local charts, protected incident captures, and selectable ETW telemetry"
 license = "PolyForm-Noncommercial-1.0.0"
 repository = "https://github.com/flochiii/stutter-watch"
 readme = "README.md"
@@ -19,6 +19,7 @@ serde_json = { version = "1", features = ["float_roundtrip"] }
 toml = "1.2"
 nvml-wrapper = "0.13"
 lz4_flex = { version = "0.14", default-features = false, features = ["std", "frame"] }
+[target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
   "Win32_Foundation", "Win32_System_Performance", "Win32_System_ProcessStatus",
   "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Memory", "Win32_System_StationsAndDesktops", "Win32_Storage_FileSystem",

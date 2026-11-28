@@ -258,7 +258,7 @@ impl Config {
             (100..=10_000).contains(&self.hung_ms),
             "hung_ms must be 100..10000"
         );
-        crate::tray::parse_hotkey(&self.hotkey)?;
+        crate::hotkey::parse_hotkey(&self.hotkey)?;
         Ok(())
     }
 

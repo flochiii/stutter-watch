@@ -443,9 +443,6 @@ pub fn nt_time_ms(time: i64) -> u64 {
     (time.max(0) as u64 / 10_000).saturating_sub(11_644_473_600_000)
 }
 
-pub fn top(processes: &[Process], metric: impl Fn(&Process) -> f64) -> Vec<Process> {
-    top_n(processes, metric, 5)
-}
 pub fn top_n(
     processes: &[Process],
     metric: impl Fn(&Process) -> f64,
