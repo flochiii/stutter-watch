@@ -34,11 +34,14 @@ jobs:
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
       - run: cargo build --locked --release
+        id: build
       - name: Run the native Linux desktop and capture screenshots
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-linux.py
       - name: Exercise native Wayland in a nested compositor
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-wayland.py
       - name: Build Linux installable packages
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: python3 scripts/package-linux.py
       - name: Save compiled release dependencies even if a desktop test fails
         if: failure()

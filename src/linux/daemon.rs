@@ -21,6 +21,7 @@ pub fn run(config: Config, path: &Path, seconds: Option<u64>, no_tray: bool) -> 
         .write(true)
         .open(runtime(path)?.with_extension("lock"))?;
     lock.try_lock().context("Recorder already running")?;
+    stutter_watch::startup::begin(path);
     let endpoint = socket(path, false)?;
     if endpoint.exists() {
         std::fs::remove_file(&endpoint)?;
@@ -88,7 +89,6 @@ pub fn run(config: Config, path: &Path, seconds: Option<u64>, no_tray: bool) -> 
             }
         }
     });
-    stutter_watch::startup::begin(path);
     stutter_watch::startup::phase("ipc.ready");
     unsafe {
         libc::signal(

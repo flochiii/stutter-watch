@@ -733,7 +733,13 @@ impl eframe::App for App {
                             .map(|s| s.points.as_slice())
                             .unwrap_or(&[])
                     };
-                    let height = ((ui.available_height() - 42.0) / 2.0).max(100.0);
+                    let height = ((ui.available_height() - 42.0)
+                        / if self.page == 2 && self.mango_view {
+                            1.0
+                        } else {
+                            2.0
+                        })
+                    .max(100.0);
                     let width = ((ui.available_width() - 16.0) / 2.0).max(240.0);
                     egui::Grid::new("charts")
                         .spacing([12.0, 12.0])

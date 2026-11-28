@@ -32,5 +32,11 @@ fn main() -> anyhow::Result<()> {
     #[cfg(windows)]
     return windows_app::main();
     #[cfg(target_os = "linux")]
-    return linux::main();
+    {
+        let result = linux::main();
+        if let Err(error) = &result {
+            startup::failed(&format!("{error:#}"));
+        }
+        result
+    }
 }

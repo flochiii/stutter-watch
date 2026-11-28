@@ -31,6 +31,20 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Action>,
 }
+
+#[cfg(test)]
+mod runtime_tests {
+    use super::*;
+    #[test]
+    fn long_desktop_runtime_paths_still_fit_unix_socket_limit() {
+        use std::os::unix::ffi::OsStrExt;
+        let base = PathBuf::from(format!("/tmp/{}", "desktop".repeat(30)));
+        let root = runtime_root(&base, 1000);
+        let socket = root.join(format!("{}.gui.sock", "a".repeat(32)));
+        assert!(socket.as_os_str().as_bytes().len() < 108);
+        assert_eq!(root, Path::new("/tmp/stutter-watch-1000"));
+    }
+}
 #[derive(Subcommand)]
 enum Action {
     ImportMangohud {
@@ -138,14 +152,15 @@ pub fn xdg(variable: &str, fallback: &str) -> Result<PathBuf> {
     Ok(home.join(fallback).join("stutter-watch"))
 }
 pub fn runtime(config: &Path) -> Result<PathBuf> {
-    use std::hash::{Hash, Hasher};
-    let mut hash = std::collections::hash_map::DefaultHasher::new();
-    config.hash(&mut hash);
+    use sha2::{Digest, Sha256};
+    use std::os::unix::ffi::OsStrExt;
+    // IPC identity must survive compiler upgrades; DefaultHasher is unspecified.
+    let hash = format!("{:x}", Sha256::digest(config.as_os_str().as_bytes()));
     let base = std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
         .filter(|p| p.is_absolute())
         .unwrap_or_else(std::env::temp_dir);
-    let root = base.join(format!("stutter-watch-{}", unsafe { libc::getuid() }));
+    let root = runtime_root(&base, unsafe { libc::getuid() });
     match std::fs::DirBuilder::new().mode(0o700).create(&root) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
@@ -156,7 +171,19 @@ pub fn runtime(config: &Path) -> Result<PathBuf> {
         meta.is_dir() && meta.uid() == unsafe { libc::getuid() } && meta.mode() & 0o077 == 0,
         "Runtime directory must be private and owned by this user"
     );
-    Ok(root.join(format!("{:016x}", hash.finish())))
+    Ok(root.join(&hash[..32]))
+}
+fn runtime_root(base: &Path, uid: u32) -> PathBuf {
+    use std::os::unix::ffi::OsStrExt;
+    let name = format!("stutter-watch-{uid}");
+    let root = base.join(&name);
+    // sockaddr_un has 108 bytes, including the terminator. Keep the same
+    // ownership/mode checks when a long desktop runtime path needs /tmp.
+    if root.as_os_str().as_bytes().len() + 1 + 32 + ".gui.sock".len() >= 108 {
+        Path::new("/tmp").join(name)
+    } else {
+        root
+    }
 }
 pub fn socket(config: &Path, gui: bool) -> Result<PathBuf> {
     Ok(runtime(config)?.with_extension(if gui { "gui.sock" } else { "sock" }))

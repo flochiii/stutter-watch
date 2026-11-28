@@ -1811,7 +1811,15 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
         let k = s.dpi as f64 / 96.0;
         let top = if s.page == 2 { 318.0 } else { 102.0 };
         let bottom = client.bottom as f64 / k - 86.0;
-        let height = (((bottom - top - 24.0) / 2.0).max(64.0) * k).ceil() as i32;
+        let height = (((bottom - top - 24.0)
+            / if s.page == 2 && s.mango_view {
+                1.0
+            } else {
+                2.0
+            })
+        .max(64.0)
+            * k)
+            .ceil() as i32;
         let width = (((client.right as f64 / k - 52.0) / 2.0) * k).ceil() as i32;
         let mut charts = Vec::new();
         let mango = s.page == 2 && s.mango_view;
