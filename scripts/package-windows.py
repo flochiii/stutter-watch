@@ -50,6 +50,9 @@ def main():
     env["CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS"] = "-C target-feature=+crt-static"
     subprocess.run(["cargo", "build", "--locked", "--release", "--target", TARGET],
                    cwd=ROOT, env=env, check=True)
+    if (command("git", "rev-parse", "HEAD") != commit or
+            subprocess.run(["git", "diff", "--quiet", "HEAD", "--"], cwd=ROOT).returncode):
+        raise RuntimeError("Source changed during the build; package a committed, frozen checkout")
     binary = ROOT / "target" / TARGET / "release/stutter-watch.exe"
     data = binary.read_bytes()
     pe = struct.unpack_from("<I", data, 0x3C)[0]

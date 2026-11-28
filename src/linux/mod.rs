@@ -33,6 +33,9 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Action {
+    ImportMangohud {
+        file: PathBuf,
+    },
     Run,
     Show,
     Shutdown,
@@ -105,6 +108,7 @@ impl Point {
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Snapshot {
+    pub observed_seconds: f64,
     pub config: Config,
     pub latest: Option<Sample>,
     pub points: Vec<Point>,
@@ -112,6 +116,14 @@ pub struct Snapshot {
     pub paused: bool,
     pub integrations: std::collections::BTreeMap<String, String>,
     pub error: String,
+}
+
+pub fn launch_executable() -> Result<PathBuf> {
+    // An AppImage child needs its own runtime/mount after its parent GUI closes.
+    Ok(std::env::var_os("APPIMAGE")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute() && p.is_file())
+        .unwrap_or(std::env::current_exe()?))
 }
 
 pub fn xdg(variable: &str, fallback: &str) -> Result<PathBuf> {
@@ -171,7 +183,7 @@ pub fn ensure_recorder(config: &Path, no_tray: bool) -> Result<()> {
     if rpc(config, "ping").is_ok() {
         return Ok(());
     }
-    let mut cmd = Command::new(std::env::current_exe()?);
+    let mut cmd = Command::new(launch_executable()?);
     cmd.arg("--config")
         .arg(config)
         .arg("run")
@@ -202,7 +214,7 @@ pub fn open_panel(config: &Path) -> Result<()> {
         let _ = socket.write_all(b"show");
         return Ok(());
     }
-    Command::new(std::env::current_exe()?)
+    Command::new(launch_executable()?)
         .arg("--config")
         .arg(config)
         .arg("--panel")
@@ -276,6 +288,18 @@ pub fn main() -> Result<()> {
     }
     let path = path.canonicalize()?;
     match cli.command {
+        Some(Action::ImportMangohud { file }) => {
+            println!(
+                "{}",
+                stutter_watch::mangohud::import(
+                    &file,
+                    &config.logs_dir,
+                    config.history.reserve_free_bytes
+                )?
+                .display()
+            );
+            Ok(())
+        }
         Some(Action::Run) => daemon::run(config, &path, cli.self_test, cli.no_tray),
         None if cli.self_test.is_some() => daemon::run(config, &path, cli.self_test, true),
         None | Some(Action::Show) => {

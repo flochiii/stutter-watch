@@ -31,14 +31,15 @@ fn stop(config: &Path) -> Result<bool> {
     else {
         return Ok(false);
     };
-    // signal validates HWND, PID and the recorder's registered window class.
-    if crate::tray::signal(config, true).is_err() {
-        return Ok(false);
-    }
     let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid as u32) }
         .context("Wait for the existing recorder")?;
     let deadline = Instant::now() + Duration::from_secs(30);
     let result = (|| {
+        // Hold the process handle before signaling: a quick clean exit must not
+        // race OpenProcess. signal validates HWND, PID and window class.
+        if crate::tray::signal(config, true).is_err() {
+            return Ok(false);
+        }
         loop {
             let mut code = 0;
             unsafe { GetExitCodeProcess(handle, &mut code) }?;

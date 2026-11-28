@@ -18,10 +18,24 @@ jobs:
         with:
           persist-credentials: false
       - name: Install build and desktop test dependencies
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev libxcb-shape0-dev libxcb-xfixes0-dev xvfb xdotool dbus-x11 imagemagick rpm squashfs-tools
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev libxcb-shape0-dev libxcb-xfixes0-dev xvfb xdotool dbus-x11 imagemagick rpm squashfs-tools openbox weston
       - name: Install Rust
         run: rustup toolchain install 1.97.1 --profile minimal --component clippy --component rustfmt && rustup override set 1.97.1
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
       - run: cargo build --locked --release
+      - name: Run the native Linux desktop and capture screenshots
+        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-linux.py
+      - name: Keep Linux test evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-desktop-evidence
+          path: |
+            target/linux-evidence/*.png
+            target/linux-evidence/*.json
+            target/linux-evidence/*.log
+            target/release/stutter-watch
+          if-no-files-found: warn
+          retention-days: 14

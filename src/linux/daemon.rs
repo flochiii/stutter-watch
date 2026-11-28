@@ -28,6 +28,7 @@ pub fn run(config: Config, path: &Path, seconds: Option<u64>, no_tray: bool) -> 
     let listener = UnixListener::bind(&endpoint)?;
     listener.set_nonblocking(true)?;
     let shared = Arc::new(Mutex::new(Snapshot {
+        observed_seconds: 0.0,
         config: config.clone(),
         latest: None,
         points: Vec::new(),
@@ -90,8 +91,11 @@ pub fn run(config: Config, path: &Path, seconds: Option<u64>, no_tray: bool) -> 
     stutter_watch::startup::begin(path);
     stutter_watch::startup::phase("ipc.ready");
     unsafe {
-        libc::signal(libc::SIGTERM, stop_signal as libc::sighandler_t);
-        libc::signal(libc::SIGINT, stop_signal as libc::sighandler_t);
+        libc::signal(
+            libc::SIGTERM,
+            stop_signal as *const () as libc::sighandler_t,
+        );
+        libc::signal(libc::SIGINT, stop_signal as *const () as libc::sighandler_t);
     }
     let mut c = config;
     let store = Recorder::new(&c)?;
@@ -110,6 +114,7 @@ pub fn run(config: Config, path: &Path, seconds: Option<u64>, no_tray: bool) -> 
     let restore = restore(&c);
     let mut history: VecDeque<Point> = restore.unwrap_or_default().into();
     let start = Instant::now();
+    let mut observed_start = Instant::now();
     let mut previous = now_ms();
     let mut flush = Instant::now();
     let mut batch = Vec::new();
@@ -135,17 +140,34 @@ pub fn run(config: Config, path: &Path, seconds: Option<u64>, no_tray: bool) -> 
                 match command.as_str() {
                     "shutdown" => STOP.store(true, Ordering::Relaxed),
                     "mark" => {
-                        if detector.mark("manual") {
-                            if let Some(p) = &detector.pending {
-                                store.incident(p);
-                            }
+                        if detector.mark("manual")
+                            && let Some(p) = &detector.pending
+                        {
+                            store.incident(p);
                         }
                     }
                     "pause" => {
                         paused = !paused;
+                        store.append(Record::Event {
+                            ts_ms: now_ms(),
+                            name: "pause".into(),
+                            detail: paused.to_string(),
+                        });
+                        history.push_back(Point {
+                            ts: now_ms(),
+                            values: [None; 9],
+                            alerts: 0,
+                        });
                         if paused {
                             detector.shutdown_snapshot();
+                            detector.clear_history();
                         }
+                    }
+                    "apply_tray" => {
+                        let replacement = Config::load(path)?;
+                        c.tray_display = replacement.tray_display;
+                        c.tray = replacement.tray;
+                        shared.lock().unwrap_or_else(|p| p.into_inner()).config = c.clone();
                     }
                     "show" => open_panel(path)?,
                     "apply" => {
@@ -158,6 +180,7 @@ pub fn run(config: Config, path: &Path, seconds: Option<u64>, no_tray: bool) -> 
                         store.barrier()?;
                         c = replacement;
                         store.configure(&c);
+                        observed_start = Instant::now();
                         detector = Detector::new(&c);
                     }
                     _ => anyhow::bail!("Unknown recorder command"),
@@ -185,10 +208,10 @@ pub fn run(config: Config, path: &Path, seconds: Option<u64>, no_tray: bool) -> 
             {
                 history.pop_front();
             }
-            if detector.push(sample.clone()) {
-                if let Some(p) = &detector.pending {
-                    store.incident(p);
-                }
+            if detector.push(sample.clone())
+                && let Some(p) = &detector.pending
+            {
+                store.incident(p);
             }
             while let Some(p) = detector.take_ready(false) {
                 store.incident(&p);
@@ -197,6 +220,7 @@ pub fn run(config: Config, path: &Path, seconds: Option<u64>, no_tray: bool) -> 
             count += 1;
             let mut snapshot = shared.lock().unwrap_or_else(|p| p.into_inner());
             snapshot.latest = Some((*sample).clone());
+            snapshot.observed_seconds = observed_start.elapsed().as_secs_f64();
             snapshot.points = history.iter().cloned().collect();
             snapshot.recording = store.status();
             snapshot.config = c.clone();

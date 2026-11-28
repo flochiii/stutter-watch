@@ -222,26 +222,27 @@ impl Worker {
                         if let Ok(nvml) = Nvml::builder()
                             .flags(InitFlags::NO_GPUS | InitFlags::NO_ATTACH)
                             .init()
+                            && let Ok(gpu) = nvml.device_by_pci_bus_id(pci.as_str())
                         {
-                            if let Ok(gpu) = nvml.device_by_pci_bus_id(pci.as_str()) {
-                                let memory = gpu.memory_info().ok();
-                                adapter.nvml = Some(NvmlMetrics {
-                                    core_mhz: gpu.clock_info(Clock::Graphics).ok(),
-                                    memory_mhz: gpu.clock_info(Clock::Memory).ok(),
-                                    temperature_c: gpu.temperature(TemperatureSensor::Gpu).ok(),
-                                    power_w: gpu.power_usage().ok().map(|v| v as f64 / 1000.0),
-                                    vram_used_bytes: memory.as_ref().map(|m| m.used),
-                                    vram_total_bytes: memory.map(|m| m.total),
-                                    ..Default::default()
-                                });
-                            }
+                            let memory = gpu.memory_info().ok();
+                            adapter.nvml = Some(NvmlMetrics {
+                                core_mhz: gpu.clock_info(Clock::Graphics).ok(),
+                                memory_mhz: gpu.clock_info(Clock::Memory).ok(),
+                                temperature_c: gpu.temperature(TemperatureSensor::Gpu).ok(),
+                                power_w: gpu.power_usage().ok().map(|v| v as f64 / 1000.0),
+                                vram_used_bytes: memory.as_ref().map(|m| m.used),
+                                vram_total_bytes: memory.map(|m| m.total),
+                                ..Default::default()
+                            });
                         }
                     } else if vendor == 0x1002 || vendor == 0x8086 {
-                        let mut sensor = NvmlMetrics::default();
-                        sensor.vram_used_bytes =
-                            read("mem_info_vram_used").and_then(|v| v.parse().ok());
-                        sensor.vram_total_bytes =
-                            read("mem_info_vram_total").and_then(|v| v.parse().ok());
+                        let mut sensor = NvmlMetrics {
+                            vram_used_bytes: read("mem_info_vram_used")
+                                .and_then(|v| v.parse().ok()),
+                            vram_total_bytes: read("mem_info_vram_total")
+                                .and_then(|v| v.parse().ok()),
+                            ..Default::default()
+                        };
                         if let Ok(entries) = std::fs::read_dir(device.join("hwmon")) {
                             for entry in entries.flatten().take(8) {
                                 let number = |file: &str| {

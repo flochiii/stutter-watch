@@ -10,12 +10,13 @@ use std::{
 const LIMIT: u64 = 64 * 1024 * 1024;
 
 pub fn import(source: &Path, root: &Path, reserve: u64) -> Result<PathBuf> {
-    let length = source.metadata()?.len();
+    let metadata = source.metadata()?;
+    let length = metadata.len();
     ensure!(
         length > 0 && length <= LIMIT,
         "MangoHud input must be 1 byte to 64 MiB"
     );
-    let mut file = File::open(source)?;
+    let mut file = File::open(source)?.take(LIMIT + 1);
     let mut digest = Sha256::new();
     let mut bytes = [0u8; 16384];
     loop {
@@ -58,7 +59,7 @@ pub fn import(source: &Path, root: &Path, reserve: u64) -> Result<PathBuf> {
         serde_json::to_writer(&mut encoder, &header)?;
         encoder.write_all(b"\n")?;
         convert(
-            BufReader::new(File::open(source)?),
+            BufReader::new(File::open(source)?.take(LIMIT + 1)),
             |elapsed_ns, fps, frametime_ms| {
                 serde_json::to_writer(
                     &mut encoder,
@@ -72,6 +73,11 @@ pub fn import(source: &Path, root: &Path, reserve: u64) -> Result<PathBuf> {
                 Ok(())
             },
         )?;
+        let after = source.metadata()?;
+        ensure!(
+            after.len() == length && after.modified()? == metadata.modified()?,
+            "MangoHud log changed during import; stop logging and try again"
+        );
         let output = encoder.finish()?;
         output.sync_all()?;
         Ok(())

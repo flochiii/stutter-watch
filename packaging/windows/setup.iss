@@ -40,7 +40,7 @@ Name: "pl"; MessagesFile: "compiler:Languages\Polish.isl"
 Name: "pt"; MessagesFile: "compiler:Languages\Portuguese.isl"
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "uk"; MessagesFile: "compiler:Languages\Ukrainian.isl"
-Name: "zh"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "zh"; MessagesFile: "languages\ChineseSimplified.isl"
 Name: "ja"; MessagesFile: "compiler:Languages\Japanese.isl"
 
 [Files]
