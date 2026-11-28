@@ -229,6 +229,32 @@ pub struct Sample {
     pub sources: Option<crate::config::Collection>,
     #[serde(default)]
     pub interactive: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pressure: Option<Pressure>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub source_status: BTreeMap<String, SourceStatus>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct SourceStatus {
+    pub available: bool,
+    pub reason: String,
+    #[serde(default)]
+    pub partial: bool,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Pressure {
+    pub cpu: Option<PressureResource>,
+    pub memory: Option<PressureResource>,
+    pub io: Option<PressureResource>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct PressureResource {
+    pub some_pct: Option<f64>,
+    pub full_pct: Option<f64>,
+    pub avg10: Option<f64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

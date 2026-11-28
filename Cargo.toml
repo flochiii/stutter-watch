@@ -19,6 +19,15 @@ serde_json = { version = "1", features = ["float_roundtrip"] }
 toml = "1.2"
 nvml-wrapper = "0.13"
 lz4_flex = { version = "0.14", default-features = false, features = ["std", "frame"] }
+csv = "1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+ksni = "0.3"
+ashpd = { version = "0.13", default-features = false, features = ["tokio", "global_shortcuts"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+x11rb = "0.13"
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
   "Win32_Foundation", "Win32_System_Performance", "Win32_System_ProcessStatus",

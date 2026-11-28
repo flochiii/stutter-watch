@@ -372,6 +372,18 @@ pub fn free_bytes(path: &Path) -> Result<u64> {
     Ok(available)
 }
 
+#[cfg(target_os = "linux")]
+pub fn free_bytes(path: &Path) -> Result<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let name = std::ffi::CString::new(path.as_os_str().as_bytes())?;
+    let mut info = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    if unsafe { libc::statvfs(name.as_ptr(), info.as_mut_ptr()) } != 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let info = unsafe { info.assume_init() };
+    Ok(info.f_bavail.saturating_mul(info.f_frsize))
+}
+
 pub fn managed_files(root: &Path) -> Result<Vec<(PathBuf, SystemTime, u64)>> {
     let mut result = Vec::new();
     for dir in [
@@ -461,6 +473,22 @@ pub fn summarize(samples: &[&Sample]) -> Option<Summary> {
             ("sample_interval_ms", Some(s.interval_ms as f64)),
         ] {
             add(s.ts_ms, key.into(), value);
+        }
+        if let Some(p) = &s.pressure {
+            for (name, resource) in [("cpu", &p.cpu), ("memory", &p.memory), ("io", &p.io)] {
+                if let Some(resource) = resource {
+                    add(
+                        s.ts_ms,
+                        format!("pressure.{name}.some_pct"),
+                        resource.some_pct,
+                    );
+                    add(
+                        s.ts_ms,
+                        format!("pressure.{name}.full_pct"),
+                        resource.full_pct,
+                    );
+                }
+            }
         }
         for core in &s.cpu.cores {
             for (key, value) in [

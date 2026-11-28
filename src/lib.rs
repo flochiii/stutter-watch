@@ -9,6 +9,7 @@ pub mod history;
 pub mod hotkey;
 pub mod i18n;
 pub mod model;
+pub mod procfs;
 pub mod recorder;
 pub mod report;
 pub mod startup;

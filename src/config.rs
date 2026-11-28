@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
+    pub linux: Linux,
     pub schema_version: u32,
     pub collection: Collection,
     pub history: History,
@@ -44,6 +45,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            linux: Linux::default(),
             schema_version: 2,
             collection: Collection::default(),
             history: History::default(),
@@ -78,6 +80,21 @@ impl Default for Config {
             etw: true,
             kernel_etw: true,
             boot_seconds: 180,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Linux {
+    pub pressure: bool,
+    pub global_shortcut: bool,
+}
+impl Default for Linux {
+    fn default() -> Self {
+        Self {
+            pressure: true,
+            global_shortcut: true,
         }
     }
 }

@@ -9,6 +9,9 @@ pub const DISK: u16 = 32;
 pub const DPC: u16 = 64;
 pub const DRIVER: u16 = 128;
 pub const DWM: u16 = 256;
+pub const CPU_STALL: u16 = 512;
+pub const MEMORY_STALL: u16 = 1024;
+pub const IO_STALL: u16 = 2048;
 pub const DELAYS: u16 = PRESENT | WINDOW | DWM;
 
 pub fn signals(c: &Config, s: &Sample) -> u16 {
@@ -19,6 +22,29 @@ pub fn signals(c: &Config, s: &Sample) -> u16 {
         .then(|| s.memory.used_bytes as f64 / s.memory.total_bytes as f64 * 100.0);
     let low_available = (s.memory.total_bytes / 20).clamp(256 * 1024 * 1024, 1024 * 1024 * 1024);
     let mut flags = 0;
+    if let Some(p) = &s.pressure {
+        if p.cpu
+            .as_ref()
+            .and_then(|v| v.some_pct)
+            .is_some_and(|v| v >= 10.0)
+        {
+            flags |= CPU_STALL;
+        }
+        if p.memory
+            .as_ref()
+            .and_then(|v| v.full_pct)
+            .is_some_and(|v| v >= 5.0)
+        {
+            flags |= MEMORY_STALL;
+        }
+        if p.io
+            .as_ref()
+            .and_then(|v| v.full_pct)
+            .is_some_and(|v| v >= 5.0)
+        {
+            flags |= IO_STALL;
+        }
+    }
     for (condition, flag) in [
         (s.cpu.usage_pct.is_some_and(|v| v >= 95.0), CPU_BUSY),
         (ram_pct.is_some_and(|v| v >= 90.0), RAM_BUSY),
@@ -92,6 +118,8 @@ pub fn reasons(c: &Config, s: &Sample) -> Vec<&'static str> {
             (DPC, "dpc_interrupt"),
             (DRIVER, "driver_spike"),
             (RAM_LOW, "memory_pressure"),
+            (MEMORY_STALL, "memory_stall"),
+            (IO_STALL, "io_stall"),
         ]
         .into_iter()
         .filter_map(|(bit, reason)| (flags & bit != 0).then_some(reason)),
