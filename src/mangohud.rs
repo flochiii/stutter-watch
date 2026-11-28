@@ -95,7 +95,10 @@ pub fn import(source: &Path, root: &Path, reserve: u64) -> Result<PathBuf> {
         .write(true)
         .open(&temporary)?;
     let result = (|| -> Result<()> {
-        let mut encoder = lz4_flex::frame::FrameEncoder::new(output);
+        let mut encoder = lz4_flex::frame::FrameEncoder::with_frame_info(
+            lz4_flex::frame::FrameInfo::new().content_checksum(true),
+            output,
+        );
         let header = Record::ExternalLog {
             source: "mangohud".into(),
             basename: source
@@ -211,6 +214,12 @@ mod tests {
         let output = import(&input, &root, 0).unwrap();
         assert_eq!(header(&output).unwrap().0, "frames.csv");
         assert_eq!(import(&input, &root, 0).unwrap(), output);
+        assert!(
+            crate::storage::managed_files(&root)
+                .unwrap()
+                .iter()
+                .any(|(p, _, _)| *p == output)
+        );
         assert_eq!(fs::read(&input).unwrap(), data);
         let mut frames = Vec::new();
         crate::report::read_records(&output, |r| {

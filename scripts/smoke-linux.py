@@ -44,13 +44,13 @@ def main():
         def screenshot(name):
             run("import", "-window", window, OUT / name)
         screenshot("linux-monitor.png")
-        click(98, 18)
+        click(194, 34)
         screenshot("linux-data.png")
-        click(229, 18)
+        click(434, 34)
         screenshot("linux-tray.png")
         run(*base, "mark")
         time.sleep(12)
-        click(160, 18)
+        click(314, 34)
         screenshot("linux-incidents.png")
         # Closing the GUI must keep the independent recorder alive.
         run("xdotool", "windowactivate", "--sync", window, "key", "alt+F4")
@@ -70,7 +70,7 @@ def main():
         windows = subprocess.check_output(["xdotool", "search", "--name", "^Stutter Watch$"], text=True).splitlines()
         window = windows[-1]
         screenshot("linux-history-restored.png")
-        click(160, 18)
+        click(314, 34)
         screenshot("linux-mangohud.png")
         run("xdotool", "windowactivate", "--sync", window, "key", "alt+F4")
         gui.wait(timeout=10)
@@ -81,7 +81,7 @@ def main():
         gui = subprocess.Popen([str(x) for x in base], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(6)
         window = subprocess.check_output(["xdotool", "search", "--name", "^Stutter Watch$"], text=True).splitlines()[-1]
-        click(98, 18)
+        click(194, 34)
         screenshot("linux-japanese.png")
         (OUT / "result.json").write_text(json.dumps({"desktop": "X11 / Xvfb / Mesa", "gui_close_keeps_recording": True,
             "history_reopened": True, "mangohud_import": True, "report": True, "screenshots": sorted(p.name for p in OUT.glob("*.png"))}, indent=2))

@@ -282,21 +282,26 @@ pub fn restore(c: &Config) -> Result<Vec<Point>> {
                 points.insert(s.ts_ms, Point::from_sample(&s, c));
             }
             Record::Summary(s) if s.end_ms >= cutoff => {
-                let mut values = [None; 9];
-                for (key, index) in [
-                    ("cpu_pct", 0),
-                    ("ram_used_pct", 1),
-                    ("pressure.cpu.some_pct", 4),
-                    ("pressure.memory.full_pct", 5),
-                    ("pressure.io.full_pct", 6),
-                ] {
-                    values[index] = s.metrics.get(key).map(|v| v.max);
+                for p in summary_points(&s, c) {
+                    points
+                        .entry(p.ts)
+                        .and_modify(|old: &mut Point| {
+                            old.alerts |= p.alerts;
+                            for (old, new) in old.values.iter_mut().zip(p.values) {
+                                if new.is_some() {
+                                    *old = new;
+                                }
+                            }
+                        })
+                        .or_insert(p);
                 }
+            }
+            Record::Event { ts_ms, name, .. } if name == "pause" && ts_ms >= cutoff => {
                 points.insert(
-                    s.end_ms,
+                    ts_ms,
                     Point {
-                        ts: s.end_ms,
-                        values,
+                        ts: ts_ms,
+                        values: [None; 9],
                         alerts: 0,
                     },
                 );
@@ -308,4 +313,81 @@ pub fn restore(c: &Config) -> Result<Vec<Point>> {
         }
     }
     Ok(points.into_values().collect())
+}
+
+fn summary_points(s: &Summary, c: &Config) -> Vec<Point> {
+    let mut points = Vec::new();
+    for (key, stats) in &s.metrics {
+        let index = match key.as_str() {
+            "cpu_pct" => 0,
+            "ram_used_pct" => 1,
+            "pressure.cpu.some_pct" => 4,
+            "pressure.memory.full_pct" => 5,
+            "pressure.io.full_pct" => 6,
+            k if k.starts_with("disk.") && k.ends_with(".read_latency_ms") => 2,
+            k if k.starts_with("disk.") && k.ends_with(".write_latency_ms") => 3,
+            k if k.starts_with("gpu.") && k.ends_with(".usage_pct") => 7,
+            _ => continue,
+        };
+        for (ts, value) in [(stats.min_ts_ms, stats.min), (stats.max_ts_ms, stats.max)] {
+            let mut values = [None; 9];
+            values[index] = Some(value);
+            let alerts = match index {
+                0 if value >= 95.0 => stutter_watch::assessment::CPU_BUSY,
+                1 if value >= 90.0 => stutter_watch::assessment::RAM_BUSY,
+                2 | 3 if value > c.disk_latency_ms => stutter_watch::assessment::DISK,
+                4 if value >= 10.0 => stutter_watch::assessment::CPU_STALL,
+                5 if value >= 5.0 => stutter_watch::assessment::MEMORY_STALL,
+                6 if value >= 5.0 => stutter_watch::assessment::IO_STALL,
+                _ => 0,
+            };
+            points.push(Point {
+                ts: if ts == 0 { s.start_ms } else { ts },
+                values,
+                alerts,
+            });
+        }
+    }
+    points
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn summary_recovery_keeps_short_disk_and_pressure_peaks() {
+        let c = Config::default();
+        let samples: Vec<_> = (0..10)
+            .map(|i| Sample {
+                ts_ms: 1_000 + i * 500,
+                elapsed_ms: i * 500,
+                interval_ms: 500,
+                disk: Disk {
+                    devices: vec![DiskDevice {
+                        name: "test".into(),
+                        read_latency_ms: Some(if i == 4 { 125.0 } else { 1.0 }),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+                pressure: Some(Pressure {
+                    io: Some(PressureResource {
+                        full_pct: Some(if i == 4 { 8.0 } else { 0.0 }),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            })
+            .collect();
+        let summary =
+            stutter_watch::storage::summarize(&samples.iter().collect::<Vec<_>>()).unwrap();
+        let points = summary_points(&summary, &c);
+        assert!(points.iter().any(|p| p.ts == 3_000
+            && p.values[2] == Some(125.0)
+            && p.alerts & stutter_watch::assessment::DISK != 0));
+        assert!(points.iter().any(|p| p.ts == 3_000
+            && p.values[6] == Some(8.0)
+            && p.alerts & stutter_watch::assessment::IO_STALL != 0));
+    }
 }

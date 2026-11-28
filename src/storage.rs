@@ -407,7 +407,10 @@ pub fn managed_files(root: &Path) -> Result<Vec<(PathBuf, SystemTime, u64)>> {
             if entry.file_type()?.is_file()
                 && !meta.file_type().is_symlink()
                 && (name.ends_with(".jsonl") || name.ends_with(".jsonl.lz4"))
-                && (name.starts_with("stutter-") || name.starts_with("incident-"))
+                && (name.starts_with("stutter-")
+                    || name.starts_with("incident-")
+                    || (name.starts_with("mangohud-")
+                        && entry.path().parent() == Some(root.join("protected").as_path())))
             {
                 result.push((entry.path(), meta.modified()?, meta.len()));
             }
@@ -516,6 +519,11 @@ pub fn summarize(samples: &[&Sample]) -> Option<Summary> {
             }
         }
         for adapter in &s.gpu.adapters {
+            add(
+                s.ts_ms,
+                format!("gpu.{}.usage_pct", adapter.luid),
+                adapter.usage_pct,
+            );
             let mut engine_totals: BTreeMap<&str, f64> = BTreeMap::new();
             for p in &adapter.processes {
                 *engine_totals.entry(&p.engine).or_default() += p.usage_pct;

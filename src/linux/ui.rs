@@ -35,7 +35,7 @@ pub fn run(path: &Path) -> Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1100.0, 800.0])
-            .with_min_inner_size([760.0, 580.0])
+            .with_min_inner_size([900.0, 680.0])
             .with_app_id("io.github.flochiii.StutterWatch")
             .with_icon(egui::IconData {
                 rgba,
@@ -48,7 +48,34 @@ pub fn run(path: &Path) -> Result<()> {
         stutter_watch::branding::NAME,
         options,
         Box::new(move |cc| {
-            cc.egui_ctx.set_visuals(egui::Visuals::dark());
+            let mut visuals = egui::Visuals::dark();
+            visuals.panel_fill = Color32::from_rgb(25, 28, 33);
+            visuals.window_fill = visuals.panel_fill;
+            visuals.override_text_color = Some(Color32::from_rgb(226, 231, 239));
+            visuals.selection.bg_fill = Color32::from_rgb(35, 53, 77);
+            visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(43, 48, 56);
+            visuals.widgets.inactive.bg_fill = Color32::from_rgb(31, 35, 41);
+            visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(64, 72, 84));
+            visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(54, 61, 71);
+            visuals.widgets.active.weak_bg_fill = Color32::from_rgb(14, 18, 24);
+            for widget in [
+                &mut visuals.widgets.inactive,
+                &mut visuals.widgets.hovered,
+                &mut visuals.widgets.active,
+            ] {
+                widget.corner_radius = egui::CornerRadius::same(1);
+            }
+            cc.egui_ctx.set_visuals(visuals);
+            cc.egui_ctx.style_mut(|style| {
+                style.spacing.item_spacing = Vec2::new(8.0, 8.0);
+                style.spacing.button_padding = Vec2::new(12.0, 6.0);
+                style
+                    .text_styles
+                    .insert(egui::TextStyle::Body, FontId::proportional(14.0));
+                style
+                    .text_styles
+                    .insert(egui::TextStyle::Button, FontId::proportional(14.0));
+            });
             let mut fonts = egui::FontDefinitions::default();
             for (name, bytes) in [
                 (
@@ -255,7 +282,7 @@ impl App {
                             points.push(Point {
                                 ts: elapsed_ns / 1_000_000,
                                 values,
-                                alerts: if frametime_ms > 100.0 {
+                                alerts: if frametime_ms > c.frame_ms {
                                     stutter_watch::assessment::PRESENT
                                 } else {
                                     0
@@ -392,21 +419,25 @@ impl App {
             "boot",
         ];
         egui::Grid::new("sources")
-            .num_columns(2)
+            .num_columns(4)
             .spacing([30.0, 10.0])
             .show(ui, |ui| {
-                for (i, key) in keys.into_iter().enumerate() {
-                    let supported = !matches!(i, 7 | 8 | 11 | 12 | 13);
-                    ui.add_enabled(supported, egui::Checkbox::new(&mut flags[i], t.get(key)));
-                    let help = t.get(&format!("help_{key}")).to_owned();
-                    let status = snapshot
-                        .and_then(|s| s.latest.as_ref())
-                        .and_then(|s| s.source_status.get(key));
-                    let reason = status
-                        .filter(|s| !s.available || s.partial)
-                        .map(|s| t.get(&s.reason))
-                        .unwrap_or("");
-                    ui.label("ⓘ").on_hover_text(format!("{help}\n{reason}"));
+                for row in 0..7 {
+                    for col in 0..2 {
+                        let i = col * 7 + row;
+                        let key = keys[i];
+                        let supported = !matches!(i, 7 | 8 | 11 | 12 | 13);
+                        ui.add_enabled(supported, egui::Checkbox::new(&mut flags[i], t.get(key)));
+                        let help = t.get(&format!("help_{key}")).to_owned();
+                        let status = snapshot
+                            .and_then(|s| s.latest.as_ref())
+                            .and_then(|s| s.source_status.get(key));
+                        let reason = status
+                            .filter(|s| !s.available || s.partial)
+                            .map(|s| t.get(&s.reason))
+                            .unwrap_or("");
+                        ui.label("ⓘ").on_hover_text(format!("{help}\n{reason}"));
+                    }
                     ui.end_row();
                 }
             });
@@ -419,6 +450,29 @@ impl App {
             &mut self.config.linux.global_shortcut,
             t.get("linux_global_shortcut"),
         );
+        ui.horizontal(|ui| {
+            ui.label(t.get("history_mode"));
+            egui::ComboBox::from_id_salt("history-mode")
+                .selected_text(t.get(
+                    if self.config.history.mode == stutter_watch::config::HistoryMode::Lossless {
+                        "lossless"
+                    } else {
+                        "summary"
+                    },
+                ))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut self.config.history.mode,
+                        stutter_watch::config::HistoryMode::Lossless,
+                        t.get("lossless"),
+                    );
+                    ui.selectable_value(
+                        &mut self.config.history.mode,
+                        stutter_watch::config::HistoryMode::Summary,
+                        t.get("summary"),
+                    );
+                });
+        });
         ui.horizontal(|ui| {
             ui.label(t.get("budget"));
             let mut budget = self.config.history.ordinary_budget_bytes / 1_000_000;
@@ -459,6 +513,7 @@ impl App {
         });
     }
     fn tray_page(&mut self, ui: &mut egui::Ui, t: &Text, snapshot: Option<&Snapshot>) {
+        ui.label(t.get("tray_choose"));
         for (key, selected) in [
             ("tray_status", &mut self.config.tray_display.status),
             ("cpu_total", &mut self.config.tray_display.cpu),
@@ -495,6 +550,15 @@ impl App {
         {
             ui.label(t.get(status));
         }
+        if ui.button(t.get("report")).clicked() {
+            let path = self.path.clone();
+            let errors = self.error.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = open_report(&path) {
+                    *errors.lock().unwrap_or_else(|p| p.into_inner()) = e.to_string();
+                }
+            });
+        }
     }
 }
 impl eframe::App for App {
@@ -528,214 +592,239 @@ impl eframe::App for App {
             };
             self.importing = None;
         }
-        egui::CentralPanel::default().show(root, |ui| {
-            ui.horizontal(|ui| {
-                for (i, key) in ["live", "data", "incidents", "tray_settings"]
-                    .iter()
-                    .enumerate()
-                {
-                    if ui.selectable_label(self.page == i, text.get(key)).clicked() {
-                        self.page = i;
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::default()
+                    .inner_margin(18.0)
+                    .fill(Color32::from_rgb(25, 28, 33)),
+            )
+            .show(root, |ui| {
+                ui.horizontal(|ui| {
+                    for (i, key) in ["live", "data", "incidents", "tray_settings"]
+                        .iter()
+                        .enumerate()
+                    {
+                        let response = ui.add_sized(
+                            [112.0, 32.0],
+                            egui::Button::new(text.get(key)).fill(if self.page == i {
+                                Color32::from_rgb(14, 18, 24)
+                            } else {
+                                Color32::from_rgb(43, 48, 56)
+                            }),
+                        );
+                        if self.page == i {
+                            ui.painter().line_segment(
+                                [response.rect.left_bottom(), response.rect.right_bottom()],
+                                Stroke::new(2.0, Color32::from_rgb(125, 173, 245)),
+                            );
+                        }
+                        if response.clicked() {
+                            self.page = i;
+                        }
                     }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button(text.get("quit")).clicked() {
+                            self.action("shutdown");
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        if ui
+                            .button(text.get(if snapshot.as_ref().is_some_and(|s| s.paused) {
+                                "resume"
+                            } else {
+                                "pause"
+                            }))
+                            .clicked()
+                        {
+                            self.action("pause");
+                        }
+                        if ui.button(text.get("mark")).clicked() {
+                            self.action("mark");
+                        }
+                    });
+                });
+                ui.separator();
+                let pressed = ui.input(|input| {
+                    input.key_pressed(egui::Key::F12)
+                        && input.modifiers.ctrl
+                        && input.modifiers.shift
+                });
+                if pressed {
+                    self.action("mark");
                 }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(text.get("report")).clicked() {
-                        let path = self.path.clone();
-                        let errors = self.error.clone();
-                        std::thread::spawn(move || {
-                            if let Err(e) = open_report(&path) {
-                                *errors.lock().unwrap_or_else(|p| p.into_inner()) = e.to_string();
+                let error = self.error.lock().unwrap_or_else(|p| p.into_inner()).clone();
+                if !error.is_empty() {
+                    egui::CollapsingHeader::new(
+                        egui::RichText::new(text.get("operation_failed")).color(Color32::LIGHT_RED),
+                    )
+                    .show(ui, |ui| {
+                        ui.label(error);
+                    });
+                }
+                if self.page == 1 {
+                    self.data_page(ui, &text, snapshot.as_ref());
+                } else if self.page == 3 {
+                    self.tray_page(ui, &text, snapshot.as_ref());
+                } else {
+                    if self.page == 2 {
+                        if ui
+                            .add_enabled(
+                                self.importing.is_none(),
+                                egui::Button::new(text.get("import_mangohud")),
+                            )
+                            .clicked()
+                        {
+                            self.import_mangohud();
+                        }
+                        self.scan();
+                        egui::ScrollArea::vertical()
+                            .id_salt("incidents")
+                            .max_height(120.0)
+                            .show(ui, |ui| {
+                                let entries = self.entries.clone();
+                                for (path, name) in entries {
+                                    if ui
+                                        .selectable_label(
+                                            self.selected.as_ref() == Some(&path),
+                                            name,
+                                        )
+                                        .clicked()
+                                    {
+                                        self.select(path);
+                                    }
+                                }
+                            });
+                        if self.entries.is_empty() {
+                            ui.label(text.get("linux_no_incidents"));
+                        }
+                        if self.mango_view {
+                            ui.label(text.get("relative_time"));
+                        } else if !self.incident.is_empty() {
+                            let flags = self.incident.iter().fold(0, |mask, p| mask | p.alerts)
+                                | self.selected_header.iter().flat_map(|h| &h.triggers).fold(
+                                    0,
+                                    |mask, t| {
+                                        mask | stutter_watch::assessment::reason_flag(&t.reason)
+                                    },
+                                );
+                            ui.label(text.get(stutter_watch::assessment::conclusion_key(flags)));
+                            if let Some(header) = &self.selected_header {
+                                ui.label(
+                                    header
+                                        .triggers
+                                        .iter()
+                                        .map(|t| {
+                                            text.get(stutter_watch::assessment::reason_key(
+                                                &t.reason,
+                                            ))
+                                        })
+                                        .collect::<std::collections::BTreeSet<_>>()
+                                        .into_iter()
+                                        .collect::<Vec<_>>()
+                                        .join(" · "),
+                                );
                             }
-                        });
+                        }
                     }
-                    if ui.button(text.get("quit")).clicked() {
-                        self.action("shutdown");
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-                    if ui
-                        .button(text.get(if snapshot.as_ref().is_some_and(|s| s.paused) {
-                            "resume"
-                        } else {
-                            "pause"
-                        }))
-                        .clicked()
-                    {
-                        self.action("pause");
-                    }
-                    if ui.button(text.get("mark")).clicked() {
-                        self.action("mark");
-                    }
-                });
-            });
-            ui.separator();
-            let pressed = ui.input(|input| {
-                input.key_pressed(egui::Key::F12) && input.modifiers.ctrl && input.modifiers.shift
-            });
-            if pressed {
-                self.action("mark");
-            }
-            let error = self.error.lock().unwrap_or_else(|p| p.into_inner()).clone();
-            if !error.is_empty() {
-                egui::CollapsingHeader::new(
-                    egui::RichText::new(text.get("operation_failed")).color(Color32::LIGHT_RED),
-                )
-                .show(ui, |ui| {
-                    ui.label(error);
-                });
-            }
-            if self.page == 1 {
-                self.data_page(ui, &text, snapshot.as_ref());
-            } else if self.page == 3 {
-                self.tray_page(ui, &text, snapshot.as_ref());
-            } else {
-                if self.page == 2 {
-                    if ui
-                        .add_enabled(
-                            self.importing.is_none(),
-                            egui::Button::new(text.get("import_mangohud")),
-                        )
-                        .clicked()
-                    {
-                        self.import_mangohud();
-                    }
-                    self.scan();
-                    egui::ScrollArea::vertical()
-                        .id_salt("incidents")
-                        .max_height(120.0)
+                    let points = if self.page == 2 {
+                        self.incident.as_slice()
+                    } else {
+                        snapshot
+                            .as_ref()
+                            .map(|s| s.points.as_slice())
+                            .unwrap_or(&[])
+                    };
+                    let height = ((ui.available_height() - 42.0) / 2.0).max(100.0);
+                    let width = ((ui.available_width() - 16.0) / 2.0).max(240.0);
+                    egui::Grid::new("charts")
+                        .spacing([12.0, 12.0])
                         .show(ui, |ui| {
-                            let entries = self.entries.clone();
-                            for (path, name) in entries {
-                                if ui
-                                    .selectable_label(self.selected.as_ref() == Some(&path), name)
-                                    .clicked()
-                                {
-                                    self.select(path);
+                            let charts = if self.page == 2 && self.mango_view {
+                                vec![
+                                    ("frame_time", vec![(2, "frame_time")]),
+                                    ("fps", vec![(0, "fps")]),
+                                ]
+                            } else {
+                                vec![
+                                    ("graph_cpu", vec![(0, "cpu_total"), (1, "memory")]),
+                                    ("graph_disk", vec![(2, "linux_read"), (3, "linux_write")]),
+                                    (
+                                        "linux_pressure",
+                                        vec![
+                                            (4, "linux_cpu_wait"),
+                                            (5, "linux_memory_stall"),
+                                            (6, "linux_io_stall"),
+                                        ],
+                                    ),
+                                    ("linux_gpu_graph", vec![(7, "gpu"), (8, "linux_vram")]),
+                                ]
+                            };
+                            for (i, (title, series)) in charts.into_iter().enumerate() {
+                                ui.allocate_ui_with_layout(
+                                    Vec2::new(width, height),
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    |ui| {
+                                        ui.label(text.get(title));
+                                        ui.horizontal(|ui| {
+                                            for (j, (index, name)) in series.iter().enumerate() {
+                                                ui.visuals_mut().widgets.active.bg_fill = COLORS[j];
+                                                ui.checkbox(
+                                                    &mut self.shown[*index],
+                                                    egui::RichText::new(text.get(name))
+                                                        .color(COLORS[j]),
+                                                );
+                                            }
+                                        });
+                                        chart(
+                                            ui,
+                                            points,
+                                            &series,
+                                            &self.shown,
+                                            if self.page == 2 && self.mango_view {
+                                                i + 4
+                                            } else {
+                                                i
+                                            },
+                                            Vec2::new(width, (height - 58.0).max(60.0)),
+                                        );
+                                    },
+                                );
+                                if i % 2 == 1 {
+                                    ui.end_row();
                                 }
                             }
                         });
-                    if self.entries.is_empty() {
-                        ui.label(text.get("linux_no_incidents"));
-                    }
-                    if self.mango_view {
-                        ui.label(text.get("relative_time"));
-                    } else if !self.incident.is_empty() {
-                        let flags = self.incident.iter().fold(0, |mask, p| mask | p.alerts)
-                            | self
-                                .selected_header
-                                .iter()
-                                .flat_map(|h| &h.triggers)
-                                .fold(0, |mask, t| {
-                                    mask | stutter_watch::assessment::reason_flag(&t.reason)
-                                });
-                        ui.label(text.get(stutter_watch::assessment::conclusion_key(flags)));
-                        if let Some(header) = &self.selected_header {
-                            ui.label(
-                                header
-                                    .triggers
-                                    .iter()
-                                    .map(|t| {
-                                        text.get(stutter_watch::assessment::reason_key(&t.reason))
-                                    })
-                                    .collect::<std::collections::BTreeSet<_>>()
-                                    .into_iter()
-                                    .collect::<Vec<_>>()
-                                    .join(" · "),
-                            );
-                        }
+                }
+                if let Some(s) = &snapshot {
+                    ui.separator();
+                    ui.label(format!(
+                        "{}: {:.1} / {:.0} MB · {}: {:.1} MB · {} MB/h",
+                        text.get("ordinary"),
+                        s.recording.usage.ordinary_bytes as f64 / 1e6,
+                        s.config.history.ordinary_budget_bytes as f64 / 1e6,
+                        text.get("protected"),
+                        s.recording.usage.protected_bytes as f64 / 1e6,
+                        stutter_watch::capacity::estimate(
+                            s.recording.usage.written_bytes,
+                            s.observed_seconds
+                        )
+                        .bytes_per_hour
+                        .map(|v| format!("{:.1}", v / 1e6))
+                        .unwrap_or_else(|| "—".into())
+                    ));
+                    if !s.recording.error.is_empty() {
+                        ui.colored_label(
+                            Color32::LIGHT_RED,
+                            text.recording_issue(&s.recording.error),
+                        );
                     }
                 }
-                let points = if self.page == 2 {
-                    self.incident.as_slice()
-                } else {
-                    snapshot
-                        .as_ref()
-                        .map(|s| s.points.as_slice())
-                        .unwrap_or(&[])
-                };
-                let height = ((ui.available_height() - 42.0) / 2.0).max(100.0);
-                let width = ((ui.available_width() - 16.0) / 2.0).max(240.0);
-                egui::Grid::new("charts")
-                    .spacing([12.0, 12.0])
-                    .show(ui, |ui| {
-                        let charts = if self.page == 2 && self.mango_view {
-                            vec![
-                                ("frame_time", vec![(2, "frame_time")]),
-                                ("fps", vec![(0, "fps")]),
-                            ]
-                        } else {
-                            vec![
-                                ("graph_cpu", vec![(0, "cpu_total"), (1, "memory")]),
-                                ("graph_disk", vec![(2, "linux_read"), (3, "linux_write")]),
-                                (
-                                    "linux_pressure",
-                                    vec![
-                                        (4, "linux_cpu_wait"),
-                                        (5, "linux_memory_stall"),
-                                        (6, "linux_io_stall"),
-                                    ],
-                                ),
-                                ("linux_gpu_graph", vec![(7, "gpu"), (8, "linux_vram")]),
-                            ]
-                        };
-                        for (i, (title, series)) in charts.into_iter().enumerate() {
-                            ui.allocate_ui(Vec2::new(width, height), |ui| {
-                                ui.label(text.get(title));
-                                ui.horizontal(|ui| {
-                                    for (j, (index, name)) in series.iter().enumerate() {
-                                        ui.visuals_mut().widgets.active.bg_fill = COLORS[j];
-                                        ui.checkbox(
-                                            &mut self.shown[*index],
-                                            egui::RichText::new(text.get(name)).color(COLORS[j]),
-                                        );
-                                    }
-                                });
-                                chart(
-                                    ui,
-                                    points,
-                                    &series,
-                                    &self.shown,
-                                    if self.page == 2 && self.mango_view {
-                                        i + 4
-                                    } else {
-                                        i
-                                    },
-                                    Vec2::new(width, (height - 58.0).max(60.0)),
-                                );
-                            });
-                            if i % 2 == 1 {
-                                ui.end_row();
-                            }
-                        }
-                    });
-            }
-            if let Some(s) = &snapshot {
-                ui.separator();
-                ui.label(format!(
-                    "{}: {:.1} / {:.0} MB · {}: {:.1} MB · {} MB/h",
-                    text.get("ordinary"),
-                    s.recording.usage.ordinary_bytes as f64 / 1e6,
-                    s.config.history.ordinary_budget_bytes as f64 / 1e6,
-                    text.get("protected"),
-                    s.recording.usage.protected_bytes as f64 / 1e6,
-                    stutter_watch::capacity::estimate(
-                        s.recording.usage.written_bytes,
-                        s.observed_seconds
-                    )
-                    .bytes_per_hour
-                    .map(|v| format!("{:.1}", v / 1e6))
-                    .unwrap_or_else(|| "—".into())
-                ));
-                if !s.recording.error.is_empty() {
-                    ui.colored_label(Color32::LIGHT_RED, text.recording_issue(&s.recording.error));
-                }
-            }
-        });
+            });
         root.ctx().request_repaint_after(Duration::from_millis(500));
     }
 }
 const COLORS: [Color32; 3] = [
-    Color32::from_rgb(106, 158, 216),
-    Color32::from_rgb(229, 181, 103),
+    Color32::from_rgb(125, 173, 245),
+    Color32::from_rgb(223, 176, 105),
     Color32::from_rgb(114, 188, 150),
 ];
 fn chart(
@@ -795,7 +884,16 @@ fn chart(
             4 | 5 => p.alerts & stutter_watch::assessment::PRESENT != 0,
             _ => false,
         };
-        if red {
+        let yellow = match group {
+            0 => {
+                p.alerts
+                    & (stutter_watch::assessment::CPU_BUSY | stutter_watch::assessment::RAM_BUSY)
+                    != 0
+            }
+            2 => p.alerts & stutter_watch::assessment::CPU_STALL != 0,
+            _ => false,
+        };
+        if red || yellow {
             let x = plot.left() + (p.ts.saturating_sub(start) as f32 / span) * plot.width();
             painter.rect_filled(
                 egui::Rect::from_min_size(
@@ -803,7 +901,11 @@ fn chart(
                     Vec2::new((plot.width() * 500.0 / span).max(1.0), plot.height()),
                 ),
                 0.0,
-                Color32::from_rgba_unmultiplied(150, 45, 45, 45),
+                if red {
+                    Color32::from_rgba_unmultiplied(190, 55, 55, 50)
+                } else {
+                    Color32::from_rgba_unmultiplied(210, 160, 55, 40)
+                },
             );
         }
     }
@@ -825,9 +927,16 @@ fn chart(
                 plot.bottom() - (value / max).clamp(0.0, 1.0) as f32 * plot.height(),
             );
             if let Some((time, prev)) = previous
-                && p.ts.saturating_sub(time) <= 3000
+                && p.ts.saturating_sub(time)
+                    <= if group >= 4 {
+                        (span * 8.0 / plot.width()).max(3000.0) as u64
+                    } else {
+                        3000
+                    }
             {
                 painter.line_segment([prev, position], Stroke::new(1.3, COLORS[j]));
+            } else {
+                painter.circle_filled(position, 1.0, COLORS[j]);
             }
             previous = Some((p.ts, position));
         }
