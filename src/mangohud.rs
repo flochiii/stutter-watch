@@ -9,6 +9,57 @@ use std::{
 };
 const LIMIT: u64 = 64 * 1024 * 1024;
 
+pub fn header(path: &Path) -> Result<(String, u64)> {
+    let mut line = String::new();
+    let input = File::open(path)?;
+    let mut reader = BufReader::new(lz4_flex::frame::FrameDecoder::new(input).take(16384));
+    reader.read_line(&mut line)?;
+    match serde_json::from_str(&line)? {
+        Record::ExternalLog {
+            basename,
+            imported_ms,
+            ..
+        } => Ok((basename, imported_ms)),
+        _ => anyhow::bail!("Not an imported recording"),
+    }
+}
+
+/// Bound viewer memory while retaining short frame-time peaks in long logs.
+pub fn reduce(points: &mut Vec<crate::dashboard::Point>) {
+    if points.len() <= 6002 {
+        return;
+    }
+    let mut reduced = Vec::with_capacity(points.len() / 2 + 2);
+    for chunk in points.chunks(4) {
+        let min = chunk
+            .iter()
+            .min_by(|a, b| {
+                a.values[3]
+                    .unwrap_or_default()
+                    .total_cmp(&b.values[3].unwrap_or_default())
+            })
+            .unwrap();
+        let max = chunk
+            .iter()
+            .max_by(|a, b| {
+                a.values[3]
+                    .unwrap_or_default()
+                    .total_cmp(&b.values[3].unwrap_or_default())
+            })
+            .unwrap();
+        let (first, second) = if min.ts <= max.ts {
+            (min, max)
+        } else {
+            (max, min)
+        };
+        reduced.push(first.clone());
+        if first.ts != second.ts {
+            reduced.push(second.clone());
+        }
+    }
+    *points = reduced;
+}
+
 pub fn import(source: &Path, root: &Path, reserve: u64) -> Result<PathBuf> {
     let metadata = source.metadata()?;
     let length = metadata.len();
@@ -150,6 +201,34 @@ pub fn convert(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn file_import_is_lossless_deduplicated_and_does_not_modify_input() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = temp.path().join("frames.csv");
+        let data = b"fps,frametime,elapsed\n60,16.67,0\n5,200,1000000000\n";
+        fs::write(&input, data).unwrap();
+        let root = temp.path().join("logs");
+        let output = import(&input, &root, 0).unwrap();
+        assert_eq!(header(&output).unwrap().0, "frames.csv");
+        assert_eq!(import(&input, &root, 0).unwrap(), output);
+        assert_eq!(fs::read(&input).unwrap(), data);
+        let mut frames = Vec::new();
+        crate::report::read_records(&output, |r| {
+            if let Record::ExternalFrame {
+                elapsed_ns,
+                fps,
+                frametime_ms,
+            } = r
+            {
+                frames.push((elapsed_ns, fps, frametime_ms));
+            }
+        })
+        .unwrap();
+        assert_eq!(frames, vec![(0, 60.0, 16.67), (1_000_000_000, 5.0, 200.0)]);
+        fs::write(&input, "bad header\n").unwrap();
+        assert!(import(&input, &root, 0).is_err());
+        assert_eq!(fs::read_dir(root.join("protected")).unwrap().count(), 1);
+    }
     #[test]
     fn imports_named_columns_and_keeps_relative_nanoseconds() {
         let data =

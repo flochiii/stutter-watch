@@ -131,6 +131,7 @@ pub fn run(path: &Path) -> Result<()> {
     .map_err(|e| anyhow::anyhow!(e.to_string()))
 }
 
+type LoadedIncident = std::sync::mpsc::Receiver<Result<(Vec<Point>, bool)>>;
 struct App {
     path: PathBuf,
     config: Config,
@@ -144,7 +145,7 @@ struct App {
     entries: Vec<(PathBuf, String)>,
     last_scan: Instant,
     shown: [bool; 9],
-    pending: Option<std::sync::mpsc::Receiver<Result<(Vec<Point>, bool)>>>,
+    pending: Option<LoadedIncident>,
     importing: Option<std::sync::mpsc::Receiver<Result<Option<PathBuf>>>>,
     mango_view: bool,
     selected_modified: Option<std::time::SystemTime>,
@@ -197,12 +198,12 @@ impl App {
         {
             self.select(path.clone());
         }
-        if self.pending.is_none() {
-            if let Some(path) = self.selected.clone() {
-                let modified = path.metadata().ok().and_then(|m| m.modified().ok());
-                if modified != self.selected_modified {
-                    self.select(path);
-                }
+        if self.pending.is_none()
+            && let Some(path) = self.selected.clone()
+        {
+            let modified = path.metadata().ok().and_then(|m| m.modified().ok());
+            if modified != self.selected_modified {
+                self.select(path);
             }
         }
     }

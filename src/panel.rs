@@ -13,6 +13,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex, mpsc::SyncSender},
 };
+use windows::Win32::UI::{Input::KeyboardAndMouse::EnableWindow, Shell::Common::COMDLG_FILTERSPEC};
 use windows::{
     Win32::{
         Foundation::*,
@@ -116,6 +117,8 @@ struct State {
     help_texts: Vec<Vec<u16>>,
     incident: Vec<Point>,
     selected_header: Option<Incident>,
+    mango_view: bool,
+    importing: Option<std::sync::mpsc::Receiver<Result<Option<PathBuf>>>>,
     incident_message: Option<&'static str>,
     dpi: i32,
     last_incident_refresh: std::time::Instant,
@@ -176,6 +179,8 @@ pub fn open(shared: Arc<Mutex<Dashboard>>, sender: SyncSender<Command>) -> Resul
             help_texts: Vec::new(),
             incident: Vec::new(),
             selected_header: None,
+            mango_view: false,
+            importing: None,
             incident_message: None,
             dpi: 96,
             last_incident_refresh: std::time::Instant::now(),
@@ -607,6 +612,15 @@ unsafe fn setup(hwnd: HWND, s: &mut State) {
             WINDOW_STYLE(0),
             2,
         );
+        control(
+            hwnd,
+            s,
+            w!("BUTTON"),
+            labels.get("import_mangohud"),
+            301,
+            WS_TABSTOP,
+            2,
+        );
         s.list = control(
             hwnd,
             s,
@@ -728,7 +742,8 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
                 204 => (width - 160, 402, 140, 32),
                 205 => (18, 444, 200, 28),
                 44 => (18, 546, width - 36, (height - 632).max(35)),
-                45 => (18, 76, width - 36, 62),
+                45 => (18, 76, width - 264, 62),
+                301 => (width - 230, 76, 212, 32),
                 300 => (18, 146, width - 36, 130),
                 610 => (18, 76, width - 36, 24),
                 600..=606 => {
@@ -766,7 +781,9 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
             );
             let _ = ShowWindow(
                 c,
-                if page == usize::MAX || page == s.page || (page == 4 && matches!(s.page, 0 | 2)) {
+                if (page == usize::MAX || page == s.page || (page == 4 && matches!(s.page, 0 | 2)))
+                    && !(s.page == 2 && s.mango_view && (400..=406).contains(&id))
+                {
                     SW_SHOW
                 } else {
                     SW_HIDE
@@ -1331,6 +1348,7 @@ unsafe fn config_changed(hwnd: HWND, s: &mut State) {
                 46 => Some("history_mode"),
                 47 => Some("language"),
                 205 => Some("details"),
+                301 => Some("import_mangohud"),
                 100..=113 => Some(SOURCE_KEYS[id - 100]),
                 204 => Some("apply"),
                 _ => None,
@@ -1404,8 +1422,10 @@ unsafe fn load_incidents(s: &mut State) {
             .clone();
         let mut paths = crate::storage::managed_files(&root).unwrap_or_default();
         paths.retain(|(p, _, _)| {
-            p.file_name()
-                .is_some_and(|n| n.to_string_lossy().starts_with("incident-"))
+            p.file_name().is_some_and(|n| {
+                let n = n.to_string_lossy();
+                n.starts_with("incident-") || n.starts_with("mangohud-")
+            })
         });
         paths.sort_by_key(|(_, m, _)| std::cmp::Reverse(*m));
         paths.truncate(200);
@@ -1423,7 +1443,20 @@ unsafe fn load_incidents(s: &mut State) {
                 next_paths.push(path);
                 continue;
             }
-            if let Ok(header) = crate::storage::incident_header(&path) {
+            if let Ok((name, timestamp)) = stutter_watch::mangohud::header(&path) {
+                let time = chrono::DateTime::from_timestamp_millis(timestamp as i64)
+                    .unwrap_or_default()
+                    .with_timezone(&chrono::Local)
+                    .format("%m-%d %H:%M:%S");
+                let row = format!(
+                    "{time}   MangoHud   {}",
+                    name.chars().take(180).collect::<String>()
+                );
+                s.incident_rows
+                    .insert(path.clone(), (modified, bytes, row.clone()));
+                next_rows.push(row);
+                next_paths.push(path);
+            } else if let Ok(header) = crate::storage::incident_header(&path) {
                 let time = chrono::DateTime::from_timestamp_millis(header.start_ms as i64)
                     .unwrap_or_default()
                     .with_timezone(&chrono::Local)
@@ -1511,6 +1544,43 @@ unsafe fn load_incidents(s: &mut State) {
         }
     }
 }
+fn import_mangohud(config: Config, owner: usize) -> Result<Option<PathBuf>> {
+    use windows::Win32::{System::Com::*, UI::Shell::*};
+    unsafe {
+        CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok()?;
+        struct Apartment;
+        impl Drop for Apartment {
+            fn drop(&mut self) {
+                unsafe {
+                    CoUninitialize();
+                }
+            }
+        }
+        let _apartment = Apartment;
+        let dialog: IFileOpenDialog =
+            CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
+        dialog.SetOptions(FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR)?;
+        dialog.SetFileTypes(&[COMDLG_FILTERSPEC {
+            pszName: w!("MangoHud CSV"),
+            pszSpec: w!("*.csv"),
+        }])?;
+        if let Err(error) = dialog.Show(Some(HWND(owner as *mut _))) {
+            if error.code().0 as u32 == 0x800704c7 {
+                return Ok(None);
+            }
+            return Err(error.into());
+        }
+        let raw = dialog.GetResult()?.GetDisplayName(SIGDN_FILESYSPATH)?;
+        let path = raw.to_string();
+        CoTaskMemFree(Some(raw.0.cast()));
+        let path = PathBuf::from(path?);
+        Ok(Some(stutter_watch::mangohud::import(
+            &path,
+            &config.logs_dir,
+            config.history.reserve_free_bytes,
+        )?))
+    }
+}
 fn incident_selection(previous: &[PathBuf], next: &[PathBuf], selected: isize) -> Option<usize> {
     usize::try_from(selected)
         .ok()
@@ -1521,12 +1591,15 @@ fn incident_selection(previous: &[PathBuf], next: &[PathBuf], selected: isize) -
 unsafe fn update_incident_caption(s: &State) {
     unsafe {
         if let Some(&(caption, _)) = s.controls.iter().find(|(c, _)| GetDlgCtrlID(*c) == 45) {
-            let text = s
-                .incident_message
-                .map(|key| s.text.get(key).to_owned())
-                .unwrap_or_else(|| {
-                    incident_summary(&s.incident, s.selected_header.as_ref(), &s.text)
-                });
+            let text = if s.mango_view {
+                s.text.get("relative_time").to_owned()
+            } else {
+                s.incident_message
+                    .map(|key| s.text.get(key).to_owned())
+                    .unwrap_or_else(|| {
+                        incident_summary(&s.incident, s.selected_header.as_ref(), &s.text)
+                    })
+            };
             set_text(caption, &text);
         }
     }
@@ -1542,6 +1615,7 @@ unsafe fn select_incident(s: &mut State) {
         let selected = send(s.list, LB_GETCURSEL, WPARAM(0), LPARAM(0)).0 as usize;
         s.incident.clear();
         s.selected_header = None;
+        s.mango_view = false;
         s.incident_message = None;
         if let Some(path) = s.paths.get(selected) {
             let result = crate::report::read_records(path, |r| match r {
@@ -1549,6 +1623,27 @@ unsafe fn select_incident(s: &mut State) {
                     s.incident.push(Point::from_sample(&sample, &config))
                 }
                 Record::Incident(h) => s.selected_header = Some(h),
+                Record::ExternalLog { .. } => s.mango_view = true,
+                Record::ExternalFrame {
+                    elapsed_ns,
+                    fps,
+                    frametime_ms,
+                } => {
+                    let mut values = [None; 7];
+                    values[3] = Some(frametime_ms);
+                    values[4] = Some(fps);
+                    s.incident.push(Point {
+                        ts: elapsed_ns / 1_000_000,
+                        values,
+                        alerts: if frametime_ms > config.frame_ms {
+                            crate::assessment::PRESENT
+                        } else {
+                            0
+                        },
+                        span_ms: 100,
+                    });
+                    stutter_watch::mangohud::reduce(&mut s.incident);
+                }
                 _ => {}
             });
             s.incident_message = if result.is_err() {
@@ -1560,6 +1655,10 @@ unsafe fn select_incident(s: &mut State) {
             };
         }
         update_incident_caption(s);
+        let parent = GetParent(s.list).unwrap_or_default();
+        if !parent.is_invalid() {
+            layout(parent, s);
+        }
     }
 }
 fn incident_summary(points: &[Point], header: Option<&Incident>, text: &Text) -> String {
@@ -1715,15 +1814,18 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
         let height = (((bottom - top - 24.0) / 2.0).max(64.0) * k).ceil() as i32;
         let width = (((client.right as f64 / k - 52.0) / 2.0) * k).ceil() as i32;
         let mut charts = Vec::new();
-        for (i, (key, series)) in [
-            ("graph_cpu", vec![0, 1]),
-            ("graph_disk", vec![2]),
-            ("graph_response", vec![3, 4]),
-            ("graph_dpc", vec![5, 6]),
-        ]
-        .into_iter()
-        .enumerate()
-        {
+        let mango = s.page == 2 && s.mango_view;
+        let definitions = if mango {
+            vec![("frame_time", vec![3]), ("fps", vec![4])]
+        } else {
+            vec![
+                ("graph_cpu", vec![0, 1]),
+                ("graph_disk", vec![2]),
+                ("graph_response", vec![3, 4]),
+                ("graph_dpc", vec![5, 6]),
+            ]
+        };
+        for (i, (key, series)) in definitions.into_iter().enumerate() {
             let left = (18.0 * k) as i32 + (i % 2) as i32 * (width + (16.0 * k) as i32);
             let y = (top * k) as i32 + (i / 2) as i32 * (height + (24.0 * k) as i32);
             charts.push((
@@ -1736,7 +1838,7 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
                 key,
                 series
                     .into_iter()
-                    .filter(|&i| s.shown[i])
+                    .filter(|&i| mango || s.shown[i])
                     .collect::<Vec<_>>(),
             ));
         }
@@ -1777,6 +1879,7 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
                         &series,
                         s.selected_header.as_ref().filter(|_| s.page == 2),
                         s.page == 0,
+                        mango,
                         &s.text,
                         k,
                     );
@@ -1810,6 +1913,7 @@ unsafe fn chart(
     series: &[usize],
     header: Option<&Incident>,
     live: bool,
+    relative: bool,
     text: &Text,
     k: f64,
 ) {
@@ -1834,14 +1938,14 @@ unsafe fn chart(
         } else {
             points.first().map(|p| p.ts).unwrap_or(0)
         };
-        let max = if series.iter().any(|&metric| metric < 2) {
+        let max = if !relative && series.iter().any(|&metric| metric < 2) {
             100.0
         } else {
             points
                 .iter()
                 .flat_map(|p| series.iter().filter_map(|&i| p.values[i]))
                 .fold(
-                    if series[0] == 3 {
+                    if series[0] == 3 && !relative {
                         250.0f64
                     } else if series[0] == 2 {
                         10.0
@@ -2014,6 +2118,9 @@ unsafe fn chart(
             }
         }
         let time = |ts| {
+            if relative {
+                return format!("{:.1} s", ts as f64 / 1000.0);
+            }
             chrono::DateTime::from_timestamp_millis(ts as i64)
                 .unwrap_or_default()
                 .with_timezone(&chrono::Local)
@@ -2084,6 +2191,32 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
                     return LRESULT(0);
                 }
                 WM_TIMER => {
+                    if let Some(receiver) = &s.importing
+                        && let Ok(result) = receiver.try_recv()
+                    {
+                        s.importing = None;
+                        let _ = EnableWindow(GetDlgItem(Some(hwnd), 301).unwrap_or_default(), true);
+                        match result {
+                            Ok(Some(path)) => {
+                                load_incidents(s);
+                                if let Some(index) = s.paths.iter().position(|p| *p == path) {
+                                    send(s.list, LB_SETCURSEL, WPARAM(index), LPARAM(0));
+                                    select_incident(s);
+                                }
+                            }
+                            Ok(None) => {}
+                            Err(e) => {
+                                let message =
+                                    wide(&format!("{}\n\n{e:#}", s.text.get("operation_failed")));
+                                let _ = MessageBoxW(
+                                    Some(hwnd),
+                                    PCWSTR(message.as_ptr()),
+                                    PCWSTR(wide(crate::branding::NAME).as_ptr()),
+                                    MB_OK | MB_ICONERROR,
+                                );
+                            }
+                        }
+                    }
                     refresh(s);
                     if s.page == 2
                         && s.last_incident_refresh.elapsed() >= std::time::Duration::from_secs(5)
@@ -2136,6 +2269,21 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
                         }
                         21 => {
                             let _ = s.sender.try_send(Command::Pause);
+                        }
+                        301 if s.importing.is_none() => {
+                            let config = s
+                                .shared
+                                .lock()
+                                .unwrap_or_else(|p| p.into_inner())
+                                .config
+                                .clone();
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            s.importing = Some(rx);
+                            let owner = hwnd.0 as usize;
+                            let _ = EnableWindow(HWND(lp.0 as *mut _), false);
+                            std::thread::spawn(move || {
+                                let _ = tx.send(import_mangohud(config, owner));
+                            });
                         }
                         600..=606 => {
                             refresh(s);

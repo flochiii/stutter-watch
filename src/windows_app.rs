@@ -45,6 +45,10 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Import a finished local MangoHud CSV without changing the source file.
+    ImportMangohud {
+        file: PathBuf,
+    },
     /// Installer lifecycle commands; recordings and user configuration are preserved.
     #[command(hide = true)]
     Maintenance {
@@ -135,6 +139,19 @@ fn execute(cli: Cli) -> Result<()> {
         );
     }
     match cli.command {
+        Some(Command::ImportMangohud { file }) => {
+            let config = Config::load(&cli.config)?;
+            println!(
+                "{}",
+                stutter_watch::mangohud::import(
+                    &file,
+                    &config.logs_dir,
+                    config.history.reserve_free_bytes
+                )?
+                .display()
+            );
+            Ok(())
+        }
         Some(Command::Maintenance {
             operation,
             directory,
