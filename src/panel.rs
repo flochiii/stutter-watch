@@ -788,6 +788,49 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
         let k = s.dpi as f64 / 96.0;
         let width = (r.right as f64 / k) as i32;
         let height = (r.bottom as f64 / k) as i32;
+        let mut action_widths = crate::design::ACTION_MIN_WIDTHS.map(|w| w as i32);
+        let mut label_widths = [108, 64, 110, 74];
+        if !s.controls.is_empty() {
+            let dc = GetDC(Some(hwnd));
+            let old = SelectObject(dc, HGDIOBJ(s.font.0));
+            for (i, w) in action_widths.iter_mut().enumerate() {
+                if let Some((button, _)) = s
+                    .controls
+                    .iter()
+                    .find(|(c, _)| GetDlgCtrlID(*c) == 20 + i as i32)
+                {
+                    let text: Vec<_> = window_text(*button).encode_utf16().collect();
+                    let mut size = SIZE::default();
+                    let _ = GetTextExtentPoint32W(dc, &text, &mut size);
+                    *w = crate::design::action_width(
+                        size.cx as f32 / k as f32,
+                        crate::design::ACTION_MIN_WIDTHS[i],
+                    ) as i32;
+                }
+            }
+            for (i, id) in [46, 47, 42, 43].into_iter().enumerate() {
+                if let Some((label, _)) = s.controls.iter().find(|(c, _)| GetDlgCtrlID(*c) == id) {
+                    let text: Vec<_> = window_text(*label).encode_utf16().collect();
+                    let mut size = SIZE::default();
+                    let _ = GetTextExtentPoint32W(dc, &text, &mut size);
+                    label_widths[i] = (size.cx as f64 / k).ceil() as i32 + 2;
+                }
+            }
+            SelectObject(dc, old);
+            ReleaseDC(Some(hwnd), dc);
+        }
+        let mut action_x = [0; 3];
+        let mut right = width - crate::design::MARGIN;
+        for i in (0..3).rev() {
+            right -= action_widths[i];
+            action_x[i] = right;
+            right -= crate::design::GAP;
+        }
+        let mode_x = crate::design::MARGIN + label_widths[0] + crate::design::GAP;
+        let language_x = crate::design::MARGIN + label_widths[1] + crate::design::GAP;
+        let budget_x = crate::design::MARGIN + label_widths[2] + crate::design::GAP;
+        let retention_label_x = budget_x + 60 + 14;
+        let retention_x = retention_label_x + label_widths[3] + crate::design::GAP;
         for &(c, page) in &s.controls {
             let id = GetDlgCtrlID(c) as usize;
             if (10..=13).contains(&id) {
@@ -801,9 +844,12 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
                     crate::design::NAV_WIDTH,
                     crate::design::NAV_HEIGHT,
                 ),
-                20 => (width - 308, 18, 102, 32),
-                21 => (width - 198, 18, 102, 32),
-                22 => (width - 88, 18, 70, 32),
+                20..=22 => (
+                    action_x[id - 20],
+                    crate::design::MARGIN,
+                    action_widths[id - 20],
+                    crate::design::NAV_HEIGHT,
+                ),
                 31 => (18, height - 38, width - 36, 24),
                 40 => (18, 122, width - 36, 24),
                 100..=113 => {
@@ -824,14 +870,14 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
                         26,
                     )
                 }
-                46 => (18, 414, 108, 22),
-                47 => (18, 76, 64, 24),
-                200 => (128, 410, 230, 100),
-                42 => (18, 448, 110, 22),
-                201 => (136, 444, 60, 30),
-                43 => (210, 448, 74, 22),
-                202 => (290, 444, 60, 30),
-                203 => (90, 72, 170, 202),
+                46 => (18, 414, label_widths[0], 22),
+                47 => (18, 76, label_widths[1], 24),
+                200 => (mode_x, 410, 230, 100),
+                42 => (18, 448, label_widths[2], 22),
+                201 => (budget_x, 444, 60, 30),
+                43 => (retention_label_x, 448, label_widths[3], 22),
+                202 => (retention_x, 444, 60, 30),
+                203 => (language_x, 72, 170, 202),
                 204 => (18, 490, 90, 30),
                 205 => (18, 532, 170, 28),
                 44 => (18, 546, width - 36, (height - 632).max(35)),
@@ -1146,15 +1192,25 @@ fn refresh(s: &mut State) {
             samples: d.samples,
         }
     };
-    if let Some((button, _)) = s
+    if let Some(button) = s
         .controls
         .iter()
         .find(|(c, _)| unsafe { GetDlgCtrlID(*c) } == 21)
+        .map(|(button, _)| *button)
     {
-        set_text(
-            *button,
-            s.text.get(if d.paused { "resume" } else { "pause" }),
-        );
+        let label = s
+            .text
+            .get(if d.paused { "resume" } else { "pause" })
+            .to_owned();
+        let changed = window_text(button) != label;
+        set_text(button, &label);
+        if changed {
+            unsafe {
+                if let Ok(parent) = GetParent(button) {
+                    layout(parent, s);
+                }
+            }
+        }
     }
     let e = capacity::estimate(d.recording.usage.written_bytes, d.observed_seconds);
     let number = |v: Option<f64>| v.map(|v| format!("{v:.1}")).unwrap_or_else(|| "—".into());

@@ -10,6 +10,21 @@ use stutter_watch::i18n::{LANGUAGE_NAMES, LANGUAGES, Text};
 const fn color(rgb: [u8; 3]) -> Color32 {
     Color32::from_rgb(rgb[0], rgb[1], rgb[2])
 }
+fn action_button(ui: &mut egui::Ui, label: &str, index: usize) -> egui::Response {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let width = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font, color(design::FOREGROUND))
+        .size()
+        .x;
+    ui.add_sized(
+        [
+            design::action_width(width, design::ACTION_MIN_WIDTHS[index]),
+            design::NAV_HEIGHT as f32,
+        ],
+        egui::Button::new(label),
+    )
+}
 
 pub fn run(path: &Path) -> Result<()> {
     let lock = std::fs::OpenOptions::new()
@@ -656,32 +671,24 @@ impl eframe::App for App {
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui
-                            .add_sized([70.0, 32.0], egui::Button::new(text.get("quit")))
-                            .clicked()
-                        {
+                        if action_button(ui, text.get("quit"), 2).clicked() {
                             self.action("shutdown");
                             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                         }
-                        if ui
-                            .add_sized(
-                                [102.0, 32.0],
-                                egui::Button::new(text.get(
-                                    if snapshot.as_ref().is_some_and(|s| s.paused) {
-                                        "resume"
-                                    } else {
-                                        "pause"
-                                    },
-                                )),
-                            )
-                            .clicked()
+                        if action_button(
+                            ui,
+                            text.get(if snapshot.as_ref().is_some_and(|s| s.paused) {
+                                "resume"
+                            } else {
+                                "pause"
+                            }),
+                            1,
+                        )
+                        .clicked()
                         {
                             self.action("pause");
                         }
-                        if ui
-                            .add_sized([102.0, 32.0], egui::Button::new(text.get("mark")))
-                            .clicked()
-                        {
+                        if action_button(ui, text.get("mark"), 0).clicked() {
                             self.action("mark");
                         }
                     });

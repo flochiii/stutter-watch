@@ -18,6 +18,7 @@ pub const MARGIN: i32 = 18;
 pub const GAP: i32 = 8;
 pub const NAV_WIDTH: i32 = 112;
 pub const NAV_HEIGHT: i32 = 32;
+pub const ACTION_MIN_WIDTHS: [f32; 3] = [102.0, 102.0, 70.0];
 pub const CHART_GAP: f32 = 12.0;
 pub const CHART_HEADER: i32 = 58;
 pub const LIVE_TOP: i32 = 76;
@@ -27,6 +28,10 @@ pub const FOOTER_SPACE: f32 = 54.0;
 pub const LATIN_FONT: &[u8] = include_bytes!("../assets/fonts/NotoSans-Regular.ttf");
 pub const CJK_SC_FONT: &[u8] = include_bytes!("../assets/fonts/ui-cjk-sc.otf");
 pub const CJK_JP_FONT: &[u8] = include_bytes!("../assets/fonts/ui-cjk-jp.otf");
+
+pub fn action_width(text_width: f32, minimum: f32) -> f32 {
+    (text_width + 24.0).ceil().max(minimum)
+}
 
 pub fn chart_size(width: f32, height: f32, rows: usize) -> (f32, f32) {
     (
