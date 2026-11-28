@@ -977,7 +977,7 @@ fn chart(
     size: Vec2,
 ) {
     let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
-    let painter = ui.painter_at(rect);
+    let painter = ui.painter().clone();
     painter.rect_filled(rect, 0.0, color(design::BACKGROUND));
     let plot = egui::Rect::from_min_max(
         rect.min + Vec2::new(42.0, 0.0),
