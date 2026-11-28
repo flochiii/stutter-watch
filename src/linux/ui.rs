@@ -433,9 +433,12 @@ impl App {
                         let key = keys[i];
                         let supported = !matches!(i, 7 | 8 | 11 | 12 | 13);
                         ui.add_enabled_ui(supported, |ui| {
-                            ui.add_sized(
-                                [if col == 0 { 170.0 } else { 195.0 }, 26.0],
-                                egui::Checkbox::new(&mut flags[i], t.get(key)),
+                            check_row(
+                                ui,
+                                &mut flags[i],
+                                t.get(key),
+                                if col == 0 { 170.0 } else { 195.0 },
+                                26.0,
                             );
                         });
                         let help = t.get(&format!("help_{key}")).to_owned();
@@ -499,7 +502,10 @@ impl App {
             );
         });
         ui.add_space(10.0);
-        if ui.button(t.get("apply")).clicked() {
+        if ui
+            .add_sized([90.0, 30.0], egui::Button::new(t.get("apply")))
+            .clicked()
+        {
             self.apply();
         }
         egui::CollapsingHeader::new(t.get("source_status")).show(ui, |ui| {
@@ -539,7 +545,7 @@ impl App {
             ),
         ] {
             ui.add_enabled_ui(!matches!(key, "dpc" | "window_response"), |ui| {
-                ui.add_sized([420.0, 22.0], egui::Checkbox::new(selected, t.get(key)));
+                check_row(ui, selected, t.get(key), 420.0, 22.0);
             })
             .response
             .on_hover_text(if matches!(key, "dpc" | "window_response") {
@@ -553,7 +559,7 @@ impl App {
             t,
             snapshot.and_then(|s| s.latest.as_ref()),
             snapshot.is_some_and(|s| s.paused),
-            false,
+            snapshot.is_some_and(|s| !s.recording.error.is_empty()),
         );
         ui.label(t.get("tray_preview"));
         tray_preview(ui, &preview);
@@ -809,6 +815,7 @@ impl eframe::App for App {
                                     Vec2::new(width, height),
                                     egui::Layout::top_down(egui::Align::Min),
                                     |ui| {
+                                        let header_top = ui.cursor().top();
                                         ui.label(text.get(title));
                                         ui.horizontal(|ui| {
                                             for (j, (index, name)) in series.iter().enumerate() {
@@ -820,6 +827,11 @@ impl eframe::App for App {
                                                 );
                                             }
                                         });
+                                        ui.add_space(
+                                            (design::CHART_HEADER as f32
+                                                - (ui.cursor().top() - header_top))
+                                                .max(0.0),
+                                        );
                                         chart(
                                             ui,
                                             points,
@@ -878,13 +890,45 @@ const COLORS: [Color32; 3] = [
     color(design::AMBER),
     color(design::GREEN),
 ];
+fn check_row(ui: &mut egui::Ui, checked: &mut bool, label: &str, width: f32, height: f32) {
+    let size = Vec2::new(width, height);
+    ui.allocate_ui_with_layout(
+        size,
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.set_min_size(size);
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+            ui.checkbox(checked, label);
+        },
+    );
+}
 fn tray_preview(ui: &mut egui::Ui, text: &str) {
     let height = 64.0 + text.lines().count().saturating_sub(1) as f32 * 22.0;
+    let content_width = text
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            ui.painter()
+                .layout_no_wrap(
+                    line.to_owned(),
+                    FontId::proportional(if i == 0 {
+                        16.0
+                    } else {
+                        design::BODY_SIZE as f32
+                    }),
+                    color(design::FOREGROUND),
+                )
+                .size()
+                .x
+                + if i == 0 { 70.0 } else { 36.0 }
+        })
+        .fold(0.0, f32::max);
+    let width = (((content_width + 47.0) / 32.0).floor() * 32.0).clamp(220.0, 460.0);
     let (rect, _) = ui.allocate_exact_size(
-        Vec2::new(ui.available_width().min(460.0), height),
+        Vec2::new(ui.available_width().min(width), height),
         egui::Sense::hover(),
     );
-    let painter = ui.painter_at(rect);
+    let painter = ui.painter().clone();
     painter.rect(
         rect,
         4.0,

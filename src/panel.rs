@@ -106,6 +106,7 @@ struct State {
     checks: Vec<HWND>,
     tray_checks: Vec<HWND>,
     tray_preview: HWND,
+    preview_width: i32,
     mode: HWND,
     budget: HWND,
     retention: HWND,
@@ -171,6 +172,7 @@ pub fn open(shared: Arc<Mutex<Dashboard>>, sender: SyncSender<Command>) -> Resul
             checks: Vec::new(),
             tray_checks: Vec::new(),
             tray_preview: HWND::default(),
+            preview_width: 220,
             mode: HWND::default(),
             budget: HWND::default(),
             retention: HWND::default(),
@@ -408,7 +410,7 @@ unsafe fn setup(hwnd: HWND, s: &mut State) {
         );
         for (i, label) in [
             "CPU",
-            "RAM",
+            labels.get("memory"),
             labels.get("linux_read"),
             "Present API",
             "UI",
@@ -807,7 +809,7 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
                 100..=113 => {
                     let i = id - 100;
                     (
-                        18 + (i / 7) as i32 * 242,
+                        18 + (i / 7) as i32 * 210,
                         150 + (i % 7) as i32 * 30,
                         if i < 7 { 170 } else { 195 },
                         26,
@@ -816,7 +818,7 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
                 500..=513 => {
                     let i = id - 500;
                     (
-                        if i < 7 { 196 } else { 463 },
+                        if i < 7 { 196 } else { 431 },
                         150 + (i % 7) as i32 * 30,
                         24,
                         26,
@@ -851,7 +853,7 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
                 614 => (
                     18,
                     340,
-                    (width - 36).min(460),
+                    (width - 36).min(s.preview_width),
                     theme::preview_height(&window_text(c)),
                 ),
                 400..=407 => legend_geometry(s, id - 400, width, height),
@@ -1187,8 +1189,12 @@ fn refresh(s: &mut State) {
         .replace('\n', "\r\n");
         let old_height = theme::preview_height(&window_text(s.tray_preview));
         let new_height = theme::preview_height(&preview);
+        let old_width = s.preview_width;
+        s.preview_width = s
+            .preview_width
+            .max(unsafe { theme::preview_width(s.tray_preview, s.font, &preview, s.dpi) });
         set_text(s.tray_preview, &preview);
-        if old_height != new_height {
+        if old_height != new_height || old_width != s.preview_width {
             unsafe {
                 if let Ok(parent) = GetParent(s.tray_preview) {
                     layout(parent, s);
@@ -1422,6 +1428,7 @@ unsafe fn config_changed(hwnd: HWND, s: &mut State) {
                 205 => Some("details"),
                 301 => Some("import_mangohud"),
                 402 => Some("linux_read"),
+                401 => Some("memory"),
                 407 => Some("linux_write"),
                 100..=113 => Some(SOURCE_KEYS[id - 100]),
                 204 => Some("apply"),

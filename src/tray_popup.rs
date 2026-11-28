@@ -16,6 +16,8 @@ use windows::{
 pub struct Popup {
     hwnd: HWND,
     font: HFONT,
+    fonts: crate::theme::Fonts,
+    language: String,
     _theme: Box<Theme>,
     text: String,
     anchor: RECT,
@@ -24,7 +26,7 @@ pub struct Popup {
     bounds: RECT,
 }
 impl Popup {
-    pub fn new(owner: Option<HWND>, anchor: RECT, text: &str) -> Result<Self> {
+    pub fn new(owner: Option<HWND>, anchor: RECT, text: &str, language: &str) -> Result<Self> {
         unsafe {
             let hwnd = CreateWindowExW(
                 WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
@@ -41,27 +43,15 @@ impl Popup {
                 None,
             )?;
             let dpi = GetDpiForWindow(hwnd).max(96) as i32;
-            let font = CreateFontW(
-                -14 * dpi / 96,
-                0,
-                0,
-                0,
-                400,
-                0,
-                0,
-                0,
-                DEFAULT_CHARSET,
-                OUT_DEFAULT_PRECIS,
-                CLIP_DEFAULT_PRECIS,
-                CLEARTYPE_QUALITY,
-                DEFAULT_PITCH.0 as u32,
-                w!("Segoe UI"),
-            );
+            let fonts = crate::theme::Fonts::new();
+            let font = fonts.font(crate::design::BODY_SIZE, dpi, language);
             let theme = Box::new(Theme::new());
             theme.attach(hwnd, Kind::Preview, font);
             let mut popup = Self {
                 hwnd,
                 font,
+                fonts,
+                language: language.into(),
                 _theme: theme,
                 text: String::new(),
                 anchor,
@@ -69,34 +59,33 @@ impl Popup {
                 dpi,
                 bounds: RECT::default(),
             };
-            popup.update(text);
+            popup.update(text, language);
             Ok(popup)
         }
     }
-    pub fn update(&mut self, text: &str) {
-        if self.text == text {
+    pub fn update(&mut self, text: &str, language: &str) {
+        if self.text == text && self.language == language {
             return;
         }
         self.text = text.into();
         unsafe {
-            let _ = SetWindowTextW(self.hwnd, PCWSTR(wide(text).as_ptr()));
-            let dc = GetDC(Some(self.hwnd));
-            let old = SelectObject(dc, HGDIOBJ(self.font.0));
-            let mut measured = 0;
-            for (i, line) in text.lines().enumerate() {
-                let units: Vec<_> = line.encode_utf16().collect();
-                let mut size = SIZE::default();
-                let _ = GetTextExtentPoint32W(dc, &units, &mut size);
-                measured = measured.max(if i == 0 {
-                    size.cx * 16 / 14 + 70 * self.dpi / 96
-                } else {
-                    size.cx + 36 * self.dpi / 96
-                });
+            if self.language != language {
+                let old_font = self.font;
+                self.font = self
+                    .fonts
+                    .font(crate::design::BODY_SIZE, self.dpi, language);
+                SendMessageW(
+                    self.hwnd,
+                    WM_SETFONT,
+                    Some(WPARAM(self.font.0 as usize)),
+                    Some(LPARAM(0)),
+                );
+                let _ = DeleteObject(HGDIOBJ(old_font.0));
+                self.language = language.into();
             }
-            SelectObject(dc, old);
-            ReleaseDC(Some(self.hwnd), dc);
-            // A small reserve keeps changing digit counts from shifting the popup.
-            let width = ((measured * 96 / self.dpi + 47) / 32 * 32).clamp(220, 460) * self.dpi / 96;
+            let _ = SetWindowTextW(self.hwnd, PCWSTR(wide(text).as_ptr()));
+            let width =
+                crate::theme::preview_width(self.hwnd, self.font, text, self.dpi) * self.dpi / 96;
             self.width = self.width.max(width);
             let mut monitor = MONITORINFO {
                 cbSize: std::mem::size_of::<MONITORINFO>() as u32,
@@ -225,12 +214,13 @@ mod tests {
                 bottom: 130,
             },
             "Stutter Watch\nCPU: 1%",
+            "en",
         )
         .unwrap();
         let hwnd = popup.hwnd;
         for value in [10, 100, 4] {
             let text = format!("Stutter Watch\nCPU: {value}%");
-            popup.update(&text);
+            popup.update(&text, "en");
             assert_eq!(popup.hwnd, hwnd);
             let mut stored = [0u16; 128];
             let length = unsafe { GetWindowTextW(hwnd, &mut stored) } as usize;

@@ -388,7 +388,7 @@ fn update_icon(context: &mut Context, action: NOTIFY_ICON_MESSAGE) {
     let mut next_tip = [0u16; 128];
     context.tooltip_text = tooltip;
     if let Some(popup) = context.popup.as_mut() {
-        popup.update(&context.tooltip_text);
+        popup.update(&context.tooltip_text, &context.display_language);
     }
     // Keep Shell's accessible icon name stable. Live numbers belong to our
     // persistent popup; modifying szTip repeatedly closes Shell's native tooltip.
@@ -583,6 +583,7 @@ unsafe extern "system" fn window_proc(
                                 Some(hwnd),
                                 anchor,
                                 &context.tooltip_text,
+                                &context.display_language,
                             )
                             .ok();
                         }

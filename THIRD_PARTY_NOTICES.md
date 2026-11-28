@@ -1,6 +1,6 @@
 # Third-party components
 
-Stutter Watch is offered under the root [PolyForm Noncommercial License 1.0.0](LICENSE). Dependencies retain their own copyright and license terms. Cargo downloads dependency sources; they are not vendored in this repository. Exact versions are recorded in [Cargo.lock](Cargo.lock). The bundled Ubuntu Light and Noto CJK fonts retain their [font licenses and notices](assets/fonts/README.md), also included in release archives under `licenses/fonts`.
+Stutter Watch is offered under the root [PolyForm Noncommercial License 1.0.0](LICENSE). Dependencies retain their own copyright and license terms. Cargo downloads dependency sources; they are not vendored in this repository. Exact versions are recorded in [Cargo.lock](Cargo.lock). The bundled Noto Sans and Noto CJK fonts retain their [font licenses and notices](assets/fonts/README.md), also included in release archives under `licenses/fonts`.
 
 Direct runtime dependencies, checked against the locked Cargo metadata:
 

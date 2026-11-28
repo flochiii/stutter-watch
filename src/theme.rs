@@ -64,7 +64,7 @@ impl Fonts {
         let face = match language {
             "zh" => "Stutter Watch UI CJK SC",
             "ja" => "Stutter Watch UI CJK JP",
-            _ => "Ubuntu Light",
+            _ => "Noto Sans",
         };
         unsafe {
             CreateFontW(
@@ -72,7 +72,7 @@ impl Fonts {
                 0,
                 0,
                 0,
-                300,
+                400,
                 0,
                 0,
                 0,
@@ -92,6 +92,33 @@ impl Drop for Fonts {
             unsafe {
                 let _ = RemoveFontMemResourceEx(handle);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod font_tests {
+    use super::*;
+    #[test]
+    fn desktop_uses_the_bundled_family_without_a_system_installation() {
+        let fonts = Fonts::new();
+        unsafe {
+            let dc = CreateCompatibleDC(None);
+            for language in ["en", "uk", "zh", "ja"] {
+                let font = fonts.font(crate::design::BODY_SIZE, 96, language);
+                let old = SelectObject(dc, HGDIOBJ(font.0));
+                let mut face = [0u16; 64];
+                let len = GetTextFaceW(dc, Some(&mut face));
+                assert!(len > 1);
+                let face = String::from_utf16_lossy(&face[..len as usize - 1]);
+                assert!(
+                    face.starts_with("Noto Sans") || face.starts_with("Stutter Watch UI CJK"),
+                    "Unexpected fallback: {face}"
+                );
+                SelectObject(dc, old);
+                let _ = DeleteObject(HGDIOBJ(font.0));
+            }
+            let _ = DeleteDC(dc);
         }
     }
 }
@@ -322,6 +349,27 @@ impl Drop for ControlStyle {
 }
 pub fn preview_height(text: &str) -> i32 {
     64 + text.lines().count().saturating_sub(1) as i32 * 22
+}
+pub unsafe fn preview_width(hwnd: HWND, font: HFONT, text: &str, dpi: i32) -> i32 {
+    unsafe {
+        let dc = GetDC(Some(hwnd));
+        let old = SelectObject(dc, HGDIOBJ(font.0));
+        let mut measured = 0;
+        for (i, line) in text.lines().enumerate() {
+            let units: Vec<_> = line.encode_utf16().collect();
+            let mut size = SIZE::default();
+            let _ = GetTextExtentPoint32W(dc, &units, &mut size);
+            measured = measured.max(if i == 0 {
+                size.cx * 16 / 14 + 70 * dpi / 96
+            } else {
+                size.cx + 36 * dpi / 96
+            });
+        }
+        SelectObject(dc, old);
+        ReleaseDC(Some(hwnd), dc);
+        // Reserve changing digit widths without resizing on every sample.
+        ((measured * 96 / dpi.max(1) + 47) / 32 * 32).clamp(220, 460)
+    }
 }
 pub unsafe fn set_active(hwnd: HWND, active: bool) {
     unsafe {

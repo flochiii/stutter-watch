@@ -24,7 +24,7 @@ pub const LIVE_TOP: i32 = 76;
 pub const BODY_SIZE: i32 = 14;
 pub const SMALL_SIZE: i32 = 10;
 pub const FOOTER_SPACE: f32 = 54.0;
-pub const LATIN_FONT: &[u8] = include_bytes!("../assets/fonts/Ubuntu-Light.ttf");
+pub const LATIN_FONT: &[u8] = include_bytes!("../assets/fonts/NotoSans-Regular.ttf");
 pub const CJK_SC_FONT: &[u8] = include_bytes!("../assets/fonts/ui-cjk-sc.otf");
 pub const CJK_JP_FONT: &[u8] = include_bytes!("../assets/fonts/ui-cjk-jp.otf");
 
