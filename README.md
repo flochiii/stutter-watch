@@ -12,7 +12,7 @@
 
 Stutter Watch records system activity in the background and saves the context around freezes. Open an incident to inspect its charts and measurements. No accounts or log uploads.
 
-![Monitor](docs/images/linux-monitor.png)
+![Monitor](docs/images/windows-monitor.png)
 
 ## Features
 
