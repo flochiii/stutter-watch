@@ -6,17 +6,21 @@
 
 ```mermaid
 flowchart LR
-    Sources[Enabled PDH / ETW / Win32 sources] --> Samples[Immutable selected samples]
+    Sources[Windows counters and events / Linux procfs and GPU sources] --> Samples[Immutable selected samples]
     Samples --> Detector[Rules and bounded prehistory]
     Samples --> History[Bounded chart projection]
     Samples --> Writer[Bounded writer queue]
     Detector --> Writer
     Writer --> Disk[JSONL / LZ4 history and captures]
-    History --> Panel[Native Win32 / GDI panel]
+    History --> Panel[Windows and Linux desktop panels]
     Disk --> Panel
 ```
 
 `sources.rs` plans dependencies and collector lifecycles. `collectors/` reads counters and events. `detector.rs` builds capture windows; `assessment.rs` shares severity rules with charts and reports. `recorder.rs` owns the bounded writer pipeline and `storage.rs` owns persistence and retention.
+
+`src/linux/` provides the Linux recorder, desktop and session integrations. The desktop and recorder communicate over a private local Unix socket. Closing the desktop leaves the recorder running. Linux collection uses procfs, PSI and guarded GPU sources; Windows collection uses PDH, ETW and Win32. Missing providers retain their actual availability rather than being replaced with unrelated measurements.
+
+`design.rs` defines the shared palette, fonts, spacing and chart geometry. Windows renders native buffered controls with GDI; Linux uses egui with OpenGL. Both use the same configuration, storage, assessment, reports and translations.
 
 Samples are shared using `Arc` across recent history, pending captures, and the writer. Overlapping marks retain independent finite capture windows. Summary mode aggregates only ordinary history; incident samples remain full.
 
@@ -33,6 +37,8 @@ Samples are shared using `Arc` across recent history, pending captures, and the 
 | DPC / ISR | Counter activity and decoded driver events are correlated by their timestamps. Some providers need privileges. |
 | NVIDIA sensors | NVML is gated by activity, PCI identity, and a confirmed recent D0 state. Unknown prerequisites mean no polling. Recent PnP power state is not proof of D3cold. |
 | Process summaries | Selected top processes and sampled counters, not a complete scheduler or allocation trace. |
+| Linux pressure | PSI measures time waiting for CPU, memory or I/O. It is distinct from utilization and does not identify a specific application's cause. |
+| MangoHud import | Existing local CSV recordings, using their relative elapsed timeline. Import does not start live game FPS collection. |
 
 Enabled ETW sources may need administrator privileges or suitable Windows group membership. Unsupported hardware, unavailable counters, or provider errors affect that source; they do not turn missing values into zeros. Short checks do not establish detection accuracy on all Windows builds, drivers, and workloads.
 

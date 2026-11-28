@@ -4,11 +4,13 @@
 
 ## Download and run
 
-Download the Windows x64 ZIP from [Releases](https://github.com/flochiii/stutter-watch/releases/tag/v0.1.0), extract it to a writable local folder, and open **stutter-watch.exe**. A no-argument launch opens the panel and uses `config.toml` beside the executable. Opening it again activates that recorder. See the [portable guide](WINDOWS_PORTABLE.md) for verification and updates.
+Choose a build from [Releases](https://github.com/flochiii/stutter-watch/releases). The [Windows guide](WINDOWS_PORTABLE.md) covers setup and portable ZIP files; the [Linux guide](LINUX.md) covers Debian, RPM and AppImage packages.
+
+Open **Stutter Watch** from the application menu, or open its portable executable. Opening it again shows the existing recorder. Closing the window keeps recording; **Quit** stops it.
 
 ## Build from source
 
-Use Windows x64, Rust 1.97+ (MSVC), Visual Studio Build Tools with C++ support, and the Windows SDK including `rc.exe`. Local interactive checks have used Windows 11; broader compatibility is still being tested.
+Use Rust 1.97.1. Windows requires MSVC Build Tools and the Windows SDK; Linux requires the desktop libraries in the [Linux guide](LINUX.md).
 
 ```powershell
 git clone https://github.com/flochiii/stutter-watch.git
@@ -51,11 +53,9 @@ Some ETW sources need elevated privileges or suitable Windows permissions. NVIDI
 # Flush writes and stop the existing recorder.
 .\target\release\stutter-watch.exe --config .\config.toml shutdown
 
-# Bounded smoke test in a separate directory.
-.\target\release\stutter-watch.exe --config .\.verification\smoke\config.toml --self-test 20 --no-tray
 ```
 
-Self-test output includes CPU, working set, parsed records, and writer gaps. Results depend on sources, privileges, and hardware; there is no universal resource guarantee.
+On Linux, use `./target/release/stutter-watch` with the same `status`, `report`, `show` and `shutdown` commands. Configuration paths are described in the platform guides.
 
 ## Start at sign-in
 
@@ -65,7 +65,7 @@ Keep the executable at a stable local path. Use the tray's startup option or:
 .\target\release\stutter-watch.exe --config .\config.toml install-autostart --start
 ```
 
-The app creates a per-user Task Scheduler task. Installing an elevated task needs an elevated terminal and `--elevated`; use this only for additional source access. `remove-autostart` removes the task without deleting logs.
+Windows creates a per-user Task Scheduler task. Installing an elevated task needs an elevated terminal and `--elevated`; use this only for additional source access. `remove-autostart` removes the task without deleting logs. On Linux, use the startup controls on **Tray**.
 
 The application uses the Windows GUI subsystem, so background startup does not allocate a console. Terminal commands still support attached or redirected output. The tray starts before collector setup and retries registration if Explorer is not ready. Slow system counters run on a separate worker; unavailable or late measurements stay missing while other enabled collection continues.
 
