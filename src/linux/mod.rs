@@ -224,6 +224,17 @@ pub fn open_panel(config: &Path) -> Result<()> {
         .spawn()?;
     Ok(())
 }
+pub fn open_report(config: &Path) -> Result<()> {
+    let config = Config::load(config)?;
+    let path = stutter_watch::report::generate(&config, 24, None)?;
+    Command::new("xdg-open")
+        .arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    Ok(())
+}
 pub fn autostart(config: &Path, enable: bool) -> Result<()> {
     let root = xdg("XDG_CONFIG_HOME", ".config")?
         .parent()

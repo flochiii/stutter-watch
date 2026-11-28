@@ -58,6 +58,37 @@ fn stop(config: &Path) -> Result<bool> {
     }
     result
 }
+fn wait_ready(config: &Path) -> Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let ready = std::fs::read(config.with_file_name("config.toml.startup.json"))
+            .ok()
+            .and_then(|v| serde_json::from_slice::<serde_json::Value>(&v).ok());
+        if let Some(value) = ready
+            && value["events"]
+                .as_array()
+                .is_some_and(|events| events.iter().any(|e| e["phase"] == "recorder.running"))
+            && let Some(pid) = value["pid"].as_u64()
+            && let Ok(handle) =
+                unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid as u32) }
+        {
+            let mut code = 0;
+            let active = unsafe { GetExitCodeProcess(handle, &mut code) }.is_ok()
+                && code == STILL_ACTIVE.0 as u32;
+            unsafe {
+                let _ = windows::Win32::Foundation::CloseHandle(handle);
+            }
+            if active {
+                return Ok(());
+            }
+        }
+        ensure!(
+            Instant::now() < deadline,
+            "Recorder did not restart after the update"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
 pub fn execute(operation: &str, directory: &Path, receipt_path: &Path) -> Result<()> {
     ensure!(
         directory.is_absolute(),
@@ -96,6 +127,9 @@ pub fn execute(operation: &str, directory: &Path, receipt_path: &Path) -> Result
                 std::fs::copy(receipt_path.with_extension("previous.exe"), &exe)?;
             }
             if state.was_running {
+                // Do not accept a diagnostic left by a previous process as proof
+                // that the replacement successfully initialized.
+                let _ = std::fs::remove_file(config.with_file_name("config.toml.startup.json"));
                 if state.scheduled && crate::autostart::owned(&exe, &config) {
                     crate::autostart::start()?;
                 } else {
@@ -110,6 +144,7 @@ pub fn execute(operation: &str, directory: &Path, receipt_path: &Path) -> Result
                         .stderr(Stdio::null())
                         .spawn()?;
                 }
+                wait_ready(&config)?;
             }
         }
         "uninstall" => {

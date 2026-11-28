@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Stutter Watch
+Comment=Record intermittent stutters and inspect their context locally
+Exec=stutter-watch
+Icon=io.github.flochiii.StutterWatch
+Terminal=false
+Categories=System;Monitor;
+Keywords=performance;stutter;latency;CPU;memory;FPS;
+StartupWMClass=io.github.flochiii.StutterWatch

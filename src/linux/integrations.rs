@@ -197,6 +197,17 @@ impl ksni::Tray for Tray {
             .into(),
             ksni::MenuItem::Separator,
             ksni::menu::StandardItem {
+                label: t.get("report").into(),
+                activate: Box::new(|s: &mut Tray| {
+                    let path = s.config.clone();
+                    std::thread::spawn(move || {
+                        let _ = open_report(&path);
+                    });
+                }),
+                ..Default::default()
+            }
+            .into(),
+            ksni::menu::StandardItem {
                 label: t.get("quit").into(),
                 activate: Box::new(|s: &mut Tray| {
                     let _ = rpc(&s.config, "shutdown");

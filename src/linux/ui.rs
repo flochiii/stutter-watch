@@ -23,12 +23,25 @@ pub fn run(path: &Path) -> Result<()> {
     let listener = std::os::unix::net::UnixListener::bind(&endpoint)?;
     listener.set_nonblocking(true)?;
     let config = Config::load(path)?;
+    let mut rgba = vec![0; 32 * 32 * 4];
+    for (left, height) in [(5, 12), (14, 20), (23, 27)] {
+        for x in left..left + 5 {
+            for y in 30 - height..30 {
+                rgba[(y * 32 + x) * 4..(y * 32 + x) * 4 + 4].copy_from_slice(&[106, 158, 216, 255]);
+            }
+        }
+    }
     let file = path.to_path_buf();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1100.0, 800.0])
             .with_min_inner_size([760.0, 580.0])
-            .with_app_id("io.github.flochiii.StutterWatch"),
+            .with_app_id("io.github.flochiii.StutterWatch")
+            .with_icon(egui::IconData {
+                rgba,
+                width: 32,
+                height: 32,
+            }),
         ..Default::default()
     };
     eframe::run_native(
@@ -122,6 +135,7 @@ pub fn run(path: &Path) -> Result<()> {
                 last_scan: Instant::now() - Duration::from_secs(10),
                 shown: [true; 9],
                 pending: None,
+                selected_header: None,
                 importing: None,
                 mango_view: false,
                 selected_modified: None,
@@ -131,7 +145,12 @@ pub fn run(path: &Path) -> Result<()> {
     .map_err(|e| anyhow::anyhow!(e.to_string()))
 }
 
-type LoadedIncident = std::sync::mpsc::Receiver<Result<(Vec<Point>, bool)>>;
+struct Capture {
+    points: Vec<Point>,
+    mango: bool,
+    header: Option<Incident>,
+}
+type LoadedIncident = std::sync::mpsc::Receiver<Result<Capture>>;
 struct App {
     path: PathBuf,
     config: Config,
@@ -146,6 +165,7 @@ struct App {
     last_scan: Instant,
     shown: [bool; 9],
     pending: Option<LoadedIncident>,
+    selected_header: Option<Incident>,
     importing: Option<std::sync::mpsc::Receiver<Result<Option<PathBuf>>>>,
     mango_view: bool,
     selected_modified: Option<std::time::SystemTime>,
@@ -179,6 +199,7 @@ impl App {
                 .is_some_and(|p| p.ends_with("incidents") || p.ends_with("protected"))
         });
         files.sort_by_key(|(_, m, _)| std::cmp::Reverse(*m));
+        files.truncate(200);
         let next: Vec<_> = files
             .into_iter()
             .map(|(p, _, _)| {
@@ -217,10 +238,12 @@ impl App {
             let result = (|| {
                 let mut points = Vec::new();
                 let mut mango = false;
+                let mut header = None;
                 stutter_watch::report::read_records(&path, |r| {
                     match r {
                         Record::Sample(s) => points.push(Point::from_sample(&s, &c)),
                         Record::ExternalLog { .. } => mango = true,
+                        Record::Incident(value) => header = Some(value),
                         Record::ExternalFrame {
                             elapsed_ns,
                             fps,
@@ -273,7 +296,11 @@ impl App {
                         points = reduced;
                     }
                 })?;
-                Ok((points, mango))
+                Ok(Capture {
+                    points,
+                    mango,
+                    header,
+                })
             })();
             let _ = tx.send(result);
         });
@@ -478,9 +505,10 @@ impl eframe::App for App {
             && let Ok(result) = receiver.try_recv()
         {
             match result {
-                Ok((points, mango)) => {
-                    self.incident = points;
-                    self.mango_view = mango;
+                Ok(capture) => {
+                    self.incident = capture.points;
+                    self.mango_view = capture.mango;
+                    self.selected_header = capture.header;
                 }
                 Err(e) => *self.error.lock().unwrap_or_else(|p| p.into_inner()) = e.to_string(),
             };
@@ -511,6 +539,15 @@ impl eframe::App for App {
                     }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(text.get("report")).clicked() {
+                        let path = self.path.clone();
+                        let errors = self.error.clone();
+                        std::thread::spawn(move || {
+                            if let Err(e) = open_report(&path) {
+                                *errors.lock().unwrap_or_else(|p| p.into_inner()) = e.to_string();
+                            }
+                        });
+                    }
                     if ui.button(text.get("quit")).clicked() {
                         self.action("shutdown");
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -581,6 +618,30 @@ impl eframe::App for App {
                     }
                     if self.mango_view {
                         ui.label(text.get("relative_time"));
+                    } else if !self.incident.is_empty() {
+                        let flags = self.incident.iter().fold(0, |mask, p| mask | p.alerts)
+                            | self
+                                .selected_header
+                                .iter()
+                                .flat_map(|h| &h.triggers)
+                                .fold(0, |mask, t| {
+                                    mask | stutter_watch::assessment::reason_flag(&t.reason)
+                                });
+                        ui.label(text.get(stutter_watch::assessment::conclusion_key(flags)));
+                        if let Some(header) = &self.selected_header {
+                            ui.label(
+                                header
+                                    .triggers
+                                    .iter()
+                                    .map(|t| {
+                                        text.get(stutter_watch::assessment::reason_key(&t.reason))
+                                    })
+                                    .collect::<std::collections::BTreeSet<_>>()
+                                    .into_iter()
+                                    .collect::<Vec<_>>()
+                                    .join(" · "),
+                            );
+                        }
                     }
                 }
                 let points = if self.page == 2 {

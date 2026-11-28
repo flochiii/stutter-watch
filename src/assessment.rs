@@ -14,6 +14,18 @@ pub const MEMORY_STALL: u16 = 1024;
 pub const IO_STALL: u16 = 2048;
 pub const DELAYS: u16 = PRESENT | WINDOW | DWM;
 
+pub fn conclusion_key(flags: u16) -> &'static str {
+    if flags & DELAYS != 0 {
+        "analysis_delay_detected"
+    } else if flags & (RAM_LOW | DISK | DPC | DRIVER | MEMORY_STALL | IO_STALL) != 0 {
+        "analysis_resource_alert"
+    } else if flags & (CPU_BUSY | RAM_BUSY | CPU_STALL) != 0 {
+        "analysis_pressure_only"
+    } else {
+        "analysis_no_delay"
+    }
+}
+
 pub fn signals(c: &Config, s: &Sample) -> u16 {
     if s.interactive == Some(false) || s.interval_ms > 3_000 {
         return 0;
@@ -165,6 +177,8 @@ pub fn reason_key(reason: &str) -> &str {
         "driver_spike" => "event_driver",
         "dgpu_wakeup" => "event_gpu",
         "memory_pressure" => "event_memory",
+        "memory_stall" => "linux_memory_stall",
+        "io_stall" => "linux_io_stall",
         "manual_mark" => "event_manual",
         "self_test" => "event_test",
         "shutdown" => "event_shutdown",
@@ -180,6 +194,8 @@ pub fn reason_flag(reason: &str) -> u16 {
         "dpc_interrupt" => DPC,
         "driver_spike" => DRIVER,
         "memory_pressure" => RAM_LOW,
+        "memory_stall" => MEMORY_STALL,
+        "io_stall" => IO_STALL,
         _ => 0,
     }
 }

@@ -40,3 +40,7 @@ jobs:
         run: python scripts/package-windows.py
       - name: Smoke-test the packaged executable
         run: ./scripts/smoke-windows.ps1 -Archive (Get-Item target/dist/*.zip).FullName
+      - name: Build the Windows installer
+        run: python scripts/installer-windows.py --archive (Get-Item target/dist/*.zip).FullName
+      - name: Test fresh install, running update, rollback and removal
+        run: ./scripts/smoke-installer-windows.ps1 -Installer (Get-Item target/dist/*-setup.exe).FullName

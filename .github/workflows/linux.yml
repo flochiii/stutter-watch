@@ -18,15 +18,26 @@ jobs:
         with:
           persist-credentials: false
       - name: Install build and desktop test dependencies
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxkbcommon-dev libwayland-dev libegl1-mesa-dev libgl1-mesa-dev libxcb-shape0-dev libxcb-xfixes0-dev xvfb xdotool dbus-x11 imagemagick rpm squashfs-tools openbox weston
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libegl1-mesa-dev libgl1-mesa-dev libxcb-shape0-dev libxcb-xfixes0-dev xvfb xdotool dbus-x11 imagemagick rpm squashfs-tools openbox weston python3-tomli
       - name: Install Rust
         run: rustup toolchain install 1.97.1 --profile minimal --component clippy --component rustfmt && rustup override set 1.97.1
+      - name: Cache Rust dependencies
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: linux-22-rust-1.97.1-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          restore-keys: linux-22-rust-1.97.1-${{ hashFiles('Cargo.lock') }}-
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
       - run: cargo build --locked --release
       - name: Run the native Linux desktop and capture screenshots
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-linux.py
+      - name: Build Linux installable packages
+        run: python3 scripts/package-linux.py
       - name: Keep Linux test evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -37,5 +48,6 @@ jobs:
             target/linux-evidence/*.json
             target/linux-evidence/*.log
             target/release/stutter-watch
+            target/dist-linux/*
           if-no-files-found: warn
           retention-days: 14
