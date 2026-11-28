@@ -9,8 +9,8 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "target/linux-evidence"
-EXE = ROOT / "target/release/stutter-watch"
+OUT = Path(os.environ.get("STUTTER_WATCH_TEST_OUTPUT", ROOT / "target/linux-evidence")).resolve()
+EXE = Path(os.environ.get("STUTTER_WATCH_TEST_EXECUTABLE", ROOT / "target/release/stutter-watch")).resolve()
 
 def run(*args, **kw):
     return subprocess.run([str(x) for x in args], check=True, **kw)

@@ -94,6 +94,12 @@ jobs:
         run: python3 scripts/package-linux.py
       - name: Exercise X11 desktop
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-linux.py
+      - name: Exercise portable AppImage desktop lifetime
+        run: |
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export STUTTER_WATCH_TEST_EXECUTABLE="$PWD/target/dist-linux/stutter-watch-$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb'))['package']['version'])")-linux-x64.AppImage"
+          export STUTTER_WATCH_TEST_OUTPUT="$PWD/target/linux-evidence/appimage"
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-linux.py
       - name: Exercise native Wayland
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-wayland.py
       - name: Attest Linux package provenance
@@ -164,7 +170,7 @@ jobs:
       - name: Measure 30-minute recorder behavior
         run: |
           mkdir -p target/soak-binary
-          tar xzf target/installers/*.tar.gz -C target/soak-binary
+          tar xzf target/installers/*-linux-x64.tar.gz -C target/soak-binary
           python3 scripts/soak-linux.py target/soak-binary/stutter-watch-*/usr/bin/stutter-watch target/linux-evidence/soak
       - name: Keep resource measurements
         if: always()

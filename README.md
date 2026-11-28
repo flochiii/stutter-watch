@@ -40,7 +40,7 @@ Ordinary history defaults to **500 MB / 24 hours**, whichever limit is reached f
 | Configurable tray and global bookmark shortcut | Native tray / hotkey | StatusNotifierItem / X11 or Wayland portal |
 | GPU activity and guarded details | Windows counters / NVML | DRM fdinfo / sysfs / guarded NVML |
 | Present API work, DPC/ISR and window-response probes | ETW / Win32 | Provider unavailable; explained in Data |
-| Resource pressure stalls | Platform counters | Kernel PSI |
+| Resource pressure signals | Windows counters | Kernel PSI |
 | Optional local MangoHud CSV viewing | Yes | Yes |
 
 New shared workflows are implemented on both platforms. Provider-specific measurements retain their actual meaning. High CPU utilization alone is not a stutter; yellow marks load pressure and red marks measured delays or critical resource signals. An annotation is evidence to inspect, not proof of a cause. Missing measurements stay unavailable.

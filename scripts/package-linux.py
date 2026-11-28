@@ -94,7 +94,7 @@ Summary: Local desktop stutter recorder and incident charts
 License: PolyForm-Noncommercial-1.0.0
 URL: https://github.com/flochiii/stutter-watch
 BuildArch: x86_64
-Requires: glibc >= 2.35, libX11, libxkbcommon, libxkbcommon-x11, wayland-libs, libglvnd-egl, libglvnd-glx
+Requires: glibc >= 2.35, libX11, libxkbcommon, libxkbcommon-x11, libwayland-client, libwayland-cursor, libwayland-egl, libglvnd-egl, libglvnd-glx
 %description
 Preserves selected performance history and protected bookmarks locally.
 %install
@@ -119,9 +119,11 @@ cp -a '{package}/.' %{{buildroot}}/
         urllib.request.urlretrieve(RUNTIME_URL, runtime)
         assert hashlib.sha256(runtime.read_bytes()).hexdigest() == RUNTIME_SHA, "AppImage runtime checksum mismatch"
         runtime_license = appdir / "usr/share/doc/stutter-watch/licenses/appimage-runtime"
-        runtime_license.mkdir()
-        urllib.request.urlretrieve("https://raw.githubusercontent.com/AppImage/type2-runtime/20251108/LICENSE", runtime_license / "LICENSE")
-        (runtime_license / "SOURCE.txt").write_text("Unmodified type2-runtime 20251108.\nhttps://github.com/AppImage/type2-runtime/tree/20251108\n" + RUNTIME_URL + "\nSHA256 " + RUNTIME_SHA + "\n")
+        runtime_spec=importlib.util.spec_from_file_location("appimage_sources",ROOT/"scripts/appimage-sources.py")
+        runtime_sources=importlib.util.module_from_spec(runtime_spec)
+        runtime_spec.loader.exec_module(runtime_sources)
+        if runtime_sources.stage_notices(runtime_license,output,version)!=RUNTIME_SHA:
+            raise RuntimeError("Runtime binary and corresponding-source manifest disagree")
         squash = work / "payload.squashfs"
         run("mksquashfs", appdir, squash, "-root-owned", "-noappend", "-comp", "gzip", "-quiet")
         appimage = output / f"stutter-watch-{version}-linux-x64.AppImage"

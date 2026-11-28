@@ -9,7 +9,9 @@
 *.css text eol=lf
 *.py text eol=lf
 *.ps1 text eol=crlf
+*.sh text eol=lf
 *.png binary
 *.ico binary
 *.otf binary
 packaging/licenses/** text eol=lf
+packaging/appimage/** text eol=lf
