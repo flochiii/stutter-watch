@@ -2617,6 +2617,7 @@ dependencies = [
  "csv",
  "eframe",
  "flate2",
+ "futures-util",
  "ksni",
  "libc",
  "lz4_flex",
@@ -2629,6 +2630,7 @@ dependencies = [
  "toml",
  "windows",
  "x11rb",
+ "zbus",
  "zstd",
 ]
 

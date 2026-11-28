@@ -340,6 +340,7 @@ impl Collector {
                 }
             }
             adapters.push(Adapter {
+                sensors: None,
                 name: identity.name.clone(),
                 vendor_id: identity.vendor,
                 luid: identity.luid.clone(),

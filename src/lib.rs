@@ -14,3 +14,4 @@ pub mod recorder;
 pub mod report;
 pub mod startup;
 pub mod storage;
+pub mod tray_display;

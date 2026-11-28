@@ -126,6 +126,8 @@ pub struct NvmlMetrics {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Adapter {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sensors: Option<NvmlMetrics>,
     pub name: String,
     pub vendor_id: u32,
     pub luid: String,

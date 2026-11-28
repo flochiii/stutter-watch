@@ -12,7 +12,7 @@ use std::{
     sync::{Arc, Condvar, Mutex, mpsc},
     thread::JoinHandle,
 };
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Status {
     pub usage: Usage,
     pub error: String,

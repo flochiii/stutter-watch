@@ -14,7 +14,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Usage {
     pub ordinary_bytes: u64,
     pub protected_bytes: u64,
@@ -527,7 +527,7 @@ pub fn summarize(samples: &[&Sample]) -> Option<Summary> {
                     Some(value.min(100.0)),
                 );
             }
-            if let Some(nvml) = &adapter.nvml {
+            if let Some(nvml) = adapter.nvml.as_ref().or(adapter.sensors.as_ref()) {
                 for (key, value) in [
                     ("power_w", nvml.power_w),
                     ("temperature_c", nvml.temperature_c.map(|v| v as f64)),
