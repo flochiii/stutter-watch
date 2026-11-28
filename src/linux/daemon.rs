@@ -327,6 +327,7 @@ fn summary_points(s: &Summary, c: &Config) -> Vec<Point> {
             k if k.starts_with("disk.") && k.ends_with(".read_latency_ms") => 2,
             k if k.starts_with("disk.") && k.ends_with(".write_latency_ms") => 3,
             k if k.starts_with("gpu.") && k.ends_with(".usage_pct") => 7,
+            k if k.starts_with("gpu.") && k.ends_with(".vram_pct") => 8,
             _ => continue,
         };
         for (ts, value) in [(stats.min_ts_ms, stats.min), (stats.max_ts_ms, stats.max)] {

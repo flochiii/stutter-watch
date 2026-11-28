@@ -66,7 +66,7 @@ pub fn run(path: &Path) -> Result<()> {
                 widget.corner_radius = egui::CornerRadius::same(1);
             }
             cc.egui_ctx.set_visuals(visuals);
-            cc.egui_ctx.style_mut(|style| {
+            cc.egui_ctx.style_mut_of(egui::Theme::Dark, |style| {
                 style.spacing.item_spacing = Vec2::new(8.0, 8.0);
                 style.spacing.button_padding = Vec2::new(12.0, 6.0);
                 style

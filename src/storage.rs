@@ -538,6 +538,13 @@ pub fn summarize(samples: &[&Sample]) -> Option<Summary> {
             if let Some(nvml) = adapter.nvml.as_ref().or(adapter.sensors.as_ref()) {
                 for (key, value) in [
                     ("power_w", nvml.power_w),
+                    (
+                        "vram_pct",
+                        nvml.vram_used_bytes
+                            .zip(nvml.vram_total_bytes)
+                            .filter(|(_, total)| *total > 0)
+                            .map(|(used, total)| used as f64 / total as f64 * 100.0),
+                    ),
                     ("temperature_c", nvml.temperature_c.map(|v| v as f64)),
                     ("core_mhz", nvml.core_mhz.map(|v| v as f64)),
                     ("memory_mhz", nvml.memory_mhz.map(|v| v as f64)),

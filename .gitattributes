@@ -11,3 +11,5 @@
 *.ps1 text eol=crlf
 *.png binary
 *.ico binary
+*.otf binary
+packaging/licenses/** text eol=lf

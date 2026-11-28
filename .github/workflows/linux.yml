@@ -27,7 +27,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
+            target/release
           key: linux-22-rust-1.97.1-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
           restore-keys: linux-22-rust-1.97.1-${{ hashFiles('Cargo.lock') }}-
       - run: cargo fmt --check
@@ -36,8 +36,19 @@ jobs:
       - run: cargo build --locked --release
       - name: Run the native Linux desktop and capture screenshots
         run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-linux.py
+      - name: Exercise native Wayland in a nested compositor
+        run: dbus-run-session -- xvfb-run -a -s '-screen 0 1280x960x24' python3 scripts/smoke-wayland.py
       - name: Build Linux installable packages
         run: python3 scripts/package-linux.py
+      - name: Save compiled release dependencies even if a desktop test fails
+        if: failure()
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/release
+          key: linux-22-rust-1.97.1-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
       - name: Keep Linux test evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -47,6 +58,9 @@ jobs:
             target/linux-evidence/*.png
             target/linux-evidence/*.json
             target/linux-evidence/*.log
+            target/linux-evidence/wayland/*.png
+            target/linux-evidence/wayland/*.json
+            target/linux-evidence/wayland/*.log
             target/release/stutter-watch
             target/dist-linux/*
           if-no-files-found: warn
