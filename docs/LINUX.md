@@ -1,6 +1,6 @@
-# Linux desktop preview
+# Stutter Watch for Linux
 
-The v0.2 source contains a Linux desktop application and a separate background recorder. Packaged downloads will be attached to the v0.2 release after validation. Supported architecture: x86_64, glibc 2.35 or later. Both X11 and Wayland are supported.
+Download Debian, RPM, AppImage or portable tar packages from [Releases](https://github.com/flochiii/stutter-watch/releases/latest). Supported architecture: x86_64, glibc 2.35 or later. Both X11 and Wayland are supported.
 
 ![Monitor](https://raw.githubusercontent.com/flochiii/stutter-watch/main/docs/images/linux-monitor.png)
 

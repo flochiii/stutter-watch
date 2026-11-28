@@ -14,7 +14,7 @@
 
 Opening the executable again shows the existing monitor. Closing the panel keeps recording in the tray; **Quit** stops it. Run normally first. Some ETW sources require administrator privileges; each unavailable source explains why in **Data**.
 
-This preview is for **Windows x64**. Windows 11 has been exercised; Windows 10 compatibility needs more testing. The C runtime is statically linked; no separate Visual C++ runtime installation is required. The app is unsigned, so Windows may show a publisher/reputation warning. Download only from this project's releases and verify the checksum before running.
+This build is for **Windows x64**. Windows 11 has been exercised; Windows 10 compatibility needs more testing. The C runtime is statically linked; no separate Visual C++ runtime installation is required. The app is unsigned, so Windows may show a publisher/reputation warning. Download only from this project's releases and verify the checksum before running.
 
 English is the initial language. Ten interface languages are included. Ordinary history defaults to 500 MB / 24 hours; protected captures use additional space and are kept until you remove them. Window titles are off by default. No telemetry is uploaded.
 
