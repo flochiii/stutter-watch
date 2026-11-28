@@ -4,7 +4,7 @@ use std::{collections::VecDeque, sync::Arc};
 #[derive(Clone, Debug)]
 pub struct Point {
     pub ts: u64,
-    pub values: [Option<f64>; 7],
+    pub values: [Option<f64>; 8],
     pub alerts: u16,
     pub span_ms: u16,
 }
@@ -21,8 +21,7 @@ impl Point {
                 s.disk
                     .devices
                     .iter()
-                    .flat_map(|d| [d.read_latency_ms, d.write_latency_ms])
-                    .flatten()
+                    .filter_map(|d| d.read_latency_ms)
                     .max_by(f64::total_cmp),
                 s.frames.present_work_ms,
                 s.foreground.response_peak_ms.map(|v| v as f64).or_else(|| {
@@ -32,6 +31,11 @@ impl Point {
                 }),
                 s.dpc.time_pct,
                 s.dpc.interrupt_pct,
+                s.disk
+                    .devices
+                    .iter()
+                    .filter_map(|d| d.write_latency_ms)
+                    .max_by(f64::total_cmp),
             ],
         }
     }
@@ -81,7 +85,7 @@ impl Dashboard {
                 .entry(p.ts)
                 .and_modify(|old: &mut Point| {
                     old.alerts |= p.alerts;
-                    for i in 0..7 {
+                    for i in 0..8 {
                         if p.values[i].is_some() {
                             old.values[i] = p.values[i];
                         }

@@ -34,7 +34,7 @@ pub fn restore(config: &Config, end: u64) -> Result<Vec<Point>> {
                         .entry(p.ts)
                         .and_modify(|old: &mut Point| {
                             old.alerts |= p.alerts;
-                            for i in 0..7 {
+                            for i in 0..8 {
                                 if p.values[i].is_some() {
                                     old.values[i] = p.values[i];
                                 }
@@ -69,12 +69,13 @@ fn summary_points(summary: &Summary, config: &Config) -> Vec<Point> {
             "window_response_ms" => Some(4),
             "dpc_pct" => Some(5),
             "interrupt_pct" => Some(6),
-            _ if key.starts_with("disk.") && key.ends_with("latency_ms") => Some(2),
+            _ if key.starts_with("disk.") && key.ends_with("read_latency_ms") => Some(2),
+            _ if key.starts_with("disk.") && key.ends_with("write_latency_ms") => Some(7),
             _ => None,
         };
         if let Some(metric) = metric {
             for (ts, value) in [(stats.min_ts_ms, stats.min), (stats.max_ts_ms, stats.max)] {
-                let mut values = [None; 7];
+                let mut values = [None; 8];
                 values[metric] = Some(value);
                 points.push(Point {
                     ts: if ts == 0 { summary.start_ms } else { ts },
@@ -83,7 +84,7 @@ fn summary_points(summary: &Summary, config: &Config) -> Vec<Point> {
                     alerts: match metric {
                         0 if value >= 95.0 => crate::assessment::CPU_BUSY,
                         1 if value >= 90.0 => crate::assessment::RAM_BUSY,
-                        2 if value > config.disk_latency_ms => crate::assessment::DISK,
+                        2 | 7 if value > config.disk_latency_ms => crate::assessment::DISK,
                         3 if value > config.frame_ms => crate::assessment::PRESENT,
                         4 if value > config.hung_ms as f64 => crate::assessment::WINDOW,
                         5 | 6 if value > config.dpc_pct => crate::assessment::DPC,
@@ -143,6 +144,15 @@ mod tests {
                         usage_pct: Some(i as f64),
                         ..Default::default()
                     },
+                    disk: Disk {
+                        devices: vec![DiskDevice {
+                            name: "test".into(),
+                            read_latency_ms: Some(2.0),
+                            write_latency_ms: Some(80.0),
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    },
                     ..Default::default()
                 })
             })
@@ -159,6 +169,49 @@ mod tests {
         assert_eq!(d.points.len(), 121);
         assert!(!d.history_loading);
         assert_eq!(d.points[0].values[0], Some(0.0));
+        assert_eq!(d.points[0].values[2], Some(2.0));
+        assert_eq!(d.points[0].values[7], Some(80.0));
         assert_eq!(d.points.back().unwrap().ts, end + 500);
+    }
+    #[test]
+    fn summary_restores_read_and_write_peaks_independently() {
+        let mut summary = Summary {
+            start_ms: 1000,
+            end_ms: 2000,
+            samples: 2,
+            metrics: BTreeMap::new(),
+            top_cpu: Vec::new(),
+            top_memory: Vec::new(),
+            top_io: Vec::new(),
+            gpu_transitions: Vec::new(),
+            boot: Boot::default(),
+            capabilities: Vec::new(),
+        };
+        for (key, max) in [("read", 2.0), ("write", 80.0)] {
+            summary.metrics.insert(
+                format!("disk.test.{key}_latency_ms"),
+                Stats {
+                    min: 1.0,
+                    max,
+                    min_ts_ms: 1000,
+                    max_ts_ms: 2000,
+                    count: 2,
+                    avg: max / 2.0,
+                    p95: max,
+                },
+            );
+        }
+        let points = summary_points(&summary, &Config::default());
+        assert!(
+            points
+                .iter()
+                .any(|p| p.values[2] == Some(2.0) && p.values[7].is_none())
+        );
+        assert!(
+            points
+                .iter()
+                .any(|p| p.values[7] == Some(80.0)
+                    && crate::assessment::severity(p.alerts, &[7]) == 2)
+        );
     }
 }

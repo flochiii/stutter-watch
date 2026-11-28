@@ -51,7 +51,7 @@ def main():
     if not license_file.exists():
         urllib.request.urlretrieve(f"https://raw.githubusercontent.com/notofonts/noto-cjk/{COMMIT}/Sans/LICENSE", license_file)
     (dest / "OFL.txt").write_bytes(license_file.read_bytes())
-    (dest / "README.md").write_text(
+    (dest / "CJK.md").write_text(
         f"# UI font subsets\n\nDerived from Noto Sans CJK SC and JP at `{COMMIT}`.\n"
         "Copyright and terms are in [OFL.txt](OFL.txt). Modified font families are named Stutter Watch UI CJK.\n\n"
         "Reproduce with `python scripts/subset-fonts.py` after installing fonttools. "

@@ -11,25 +11,88 @@ use windows::{
 pub const fn rgb(r: u8, g: u8, b: u8) -> COLORREF {
     COLORREF(r as u32 | ((g as u32) << 8) | ((b as u32) << 16))
 }
-pub const BACKGROUND: COLORREF = rgb(25, 28, 33);
-pub const FIELD: COLORREF = rgb(31, 35, 41);
-pub const BUTTON: COLORREF = rgb(43, 48, 56);
-pub const ACTIVE: COLORREF = rgb(14, 18, 24);
-pub const HOVER: COLORREF = rgb(54, 61, 71);
-pub const BORDER: COLORREF = rgb(64, 72, 84);
-pub const FOREGROUND: COLORREF = rgb(226, 231, 239);
-pub const MUTED: COLORREF = rgb(156, 167, 183);
-pub const BLUE: COLORREF = rgb(125, 173, 245);
-pub const AMBER: COLORREF = rgb(223, 176, 105);
-pub const GRID: COLORREF = rgb(49, 55, 65);
-pub const DANGER: COLORREF = rgb(244, 115, 122);
-pub const DANGER_BG: COLORREF = rgb(58, 30, 36);
-pub const WARNING_BG: COLORREF = rgb(51, 43, 29);
+const fn palette(value: [u8; 3]) -> COLORREF {
+    rgb(value[0], value[1], value[2])
+}
+pub const BACKGROUND: COLORREF = palette(crate::design::BACKGROUND);
+pub const FIELD: COLORREF = palette(crate::design::FIELD);
+pub const BUTTON: COLORREF = palette(crate::design::BUTTON);
+pub const ACTIVE: COLORREF = palette(crate::design::ACTIVE);
+pub const HOVER: COLORREF = palette(crate::design::HOVER);
+pub const BORDER: COLORREF = palette(crate::design::BORDER);
+pub const FOREGROUND: COLORREF = palette(crate::design::FOREGROUND);
+pub const MUTED: COLORREF = palette(crate::design::MUTED);
+pub const BLUE: COLORREF = palette(crate::design::BLUE);
+pub const AMBER: COLORREF = palette(crate::design::AMBER);
+pub const GRID: COLORREF = palette(crate::design::GRID);
+pub const DANGER: COLORREF = palette(crate::design::DANGER);
+pub const DANGER_BG: COLORREF = palette(crate::design::DANGER_BG);
+pub const WARNING_BG: COLORREF = palette(crate::design::WARNING_BG);
 pub const fn series_color(index: usize) -> COLORREF {
-    if matches!(index, 1 | 4 | 6) {
+    if matches!(index, 1 | 4 | 6 | 7) {
         AMBER
     } else {
         BLUE
+    }
+}
+
+pub struct Fonts(Vec<HANDLE>);
+impl Fonts {
+    pub fn new() -> Self {
+        let mut handles = Vec::new();
+        for bytes in [
+            crate::design::LATIN_FONT,
+            crate::design::CJK_SC_FONT,
+            crate::design::CJK_JP_FONT,
+        ] {
+            let mut count = 0;
+            let handle = unsafe {
+                AddFontMemResourceEx(
+                    bytes.as_ptr().cast(),
+                    bytes.len() as u32,
+                    None,
+                    &raw mut count,
+                )
+            };
+            if !handle.is_invalid() {
+                handles.push(handle);
+            }
+        }
+        Self(handles)
+    }
+    pub fn font(&self, size: i32, dpi: i32, language: &str) -> HFONT {
+        let face = match language {
+            "zh" => "Stutter Watch UI CJK SC",
+            "ja" => "Stutter Watch UI CJK JP",
+            _ => "Ubuntu Light",
+        };
+        unsafe {
+            CreateFontW(
+                -size * dpi / 96,
+                0,
+                0,
+                0,
+                300,
+                0,
+                0,
+                0,
+                DEFAULT_CHARSET,
+                OUT_DEFAULT_PRECIS,
+                CLIP_DEFAULT_PRECIS,
+                ANTIALIASED_QUALITY,
+                DEFAULT_PITCH.0 as u32,
+                windows::core::PCWSTR(crate::collectors::pdh::wide(face).as_ptr()),
+            )
+        }
+    }
+}
+impl Drop for Fonts {
+    fn drop(&mut self) {
+        for handle in self.0.drain(..) {
+            unsafe {
+                let _ = RemoveFontMemResourceEx(handle);
+            }
+        }
     }
 }
 
@@ -418,9 +481,9 @@ unsafe fn paint_control(hwnd: HWND, style: &mut ControlStyle) {
                 let size = 14 * dpi / 96;
                 let y = (r.bottom - size) / 2;
                 let box_rect = RECT {
-                    left: 4 * dpi / 96,
+                    left: 0,
                     top: y,
-                    right: 4 * dpi / 96 + size,
+                    right: size,
                     bottom: y + size,
                 };
                 let checked = SendMessageW(hwnd, BM_GETCHECK, None, None).0 == 1;
@@ -440,19 +503,10 @@ unsafe fn paint_control(hwnd: HWND, style: &mut ControlStyle) {
                     let _ = DeleteObject(HGDIOBJ(pen.0));
                 }
                 let mut text = r;
-                text.left = box_rect.right + 9 * dpi / 96;
+                text.left = box_rect.right + 4 * dpi / 96;
                 let id = GetDlgCtrlID(hwnd);
-                if (400..=406).contains(&id) {
-                    let key = RECT {
-                        left: text.left,
-                        top: r.bottom / 2 - dpi / 96,
-                        right: text.left + 13 * dpi / 96,
-                        bottom: r.bottom / 2 + 2 * dpi / 96,
-                    };
-                    let color = SetDCBrushColor(dc, series_color((id - 400) as usize));
-                    FillRect(dc, &key, HBRUSH(GetStockObject(DC_BRUSH).0));
-                    SetDCBrushColor(dc, color);
-                    text.left += 21 * dpi / 96;
+                if (400..=407).contains(&id) {
+                    SetTextColor(dc, series_color((id - 400) as usize));
                 }
                 label(dc, text, &title, DT_LEFT | DT_VCENTER);
             }
@@ -513,6 +567,21 @@ unsafe extern "system" fn control_proc(
                 let _ = RemoveWindowSubclass(hwnd, Some(control_proc), 1);
                 drop(Box::from_raw(ptr));
                 return DefSubclassProc(hwnd, message, wp, lp);
+            }
+            WM_SETFONT => {
+                (*ptr).font = HFONT(wp.0 as *mut _);
+                if !(*ptr).heading.is_invalid() {
+                    let _ = DeleteObject(HGDIOBJ((*ptr).heading.0));
+                    let mut lf = LOGFONTW::default();
+                    GetObjectW(
+                        HGDIOBJ((*ptr).font.0),
+                        std::mem::size_of::<LOGFONTW>() as i32,
+                        Some((&mut lf as *mut LOGFONTW).cast()),
+                    );
+                    lf.lfWeight = 600;
+                    lf.lfHeight = lf.lfHeight * 16 / 14;
+                    (*ptr).heading = CreateFontIndirectW(&lf);
+                }
             }
             WM_PAINT => {
                 paint_control(hwnd, &mut *ptr);

@@ -112,6 +112,8 @@ def main():
         rust_folder.mkdir()
         shutil.copy2(rust_docs / "COPYRIGHT-library.html", rust_folder)
         shutil.copytree(rust_docs / "licenses", rust_folder / "licenses")
+        shutil.copytree(ROOT / "assets/fonts", stage / "licenses/fonts",
+                        ignore=shutil.ignore_patterns("*.otf", "*.ttf"))
         (stage / "licenses/dependencies.json").write_text(
             json.dumps(inventory, indent=2) + "\n", encoding="utf-8")
         build = {"product": "Stutter Watch", "version": version, "commit": commit,

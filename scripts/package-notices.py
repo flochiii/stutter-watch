@@ -62,6 +62,6 @@ def inventory(root, stage, target):
     rust_folder.mkdir(parents=True)
     shutil.copy2(rust_docs / "COPYRIGHT-library.html", rust_folder)
     shutil.copytree(rust_docs / "licenses", rust_folder / "licenses")
-    shutil.copytree(root / "assets/fonts", stage / "licenses/fonts", ignore=shutil.ignore_patterns("*.otf"))
+    shutil.copytree(root / "assets/fonts", stage / "licenses/fonts", ignore=shutil.ignore_patterns("*.otf", "*.ttf"))
     (stage / "licenses/dependencies.json").write_text(json.dumps(result, indent=2)+"\n", encoding="utf-8")
     return result

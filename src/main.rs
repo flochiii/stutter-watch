@@ -1,8 +1,8 @@
 #![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
 
 pub use stutter_watch::{
-    assessment, branding, capacity, config, dashboard, detector, history, i18n, model, recorder,
-    report, startup, storage, tray_display,
+    assessment, branding, capacity, config, dashboard, design, detector, history, i18n, model,
+    recorder, report, startup, storage, tray_display,
 };
 #[cfg(windows)]
 mod autostart;

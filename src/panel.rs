@@ -100,6 +100,8 @@ struct State {
     text: Text,
     page: usize,
     font: HFONT,
+    small_font: HFONT,
+    fonts: theme::Fonts,
     controls: Vec<(HWND, usize)>,
     checks: Vec<HWND>,
     tray_checks: Vec<HWND>,
@@ -122,7 +124,7 @@ struct State {
     incident_message: Option<&'static str>,
     dpi: i32,
     last_incident_refresh: std::time::Instant,
-    shown: [bool; 7],
+    shown: [bool; 8],
     surface: Option<Surface>,
     theme: Theme,
     details_window: HWND,
@@ -132,6 +134,7 @@ impl Drop for State {
     fn drop(&mut self) {
         unsafe {
             let _ = DeleteObject(HGDIOBJ(self.font.0));
+            let _ = DeleteObject(HGDIOBJ(self.small_font.0));
         }
         let mut d = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         d.visible = false;
@@ -162,6 +165,8 @@ pub fn open(shared: Arc<Mutex<Dashboard>>, sender: SyncSender<Command>) -> Resul
             text: Text::new(&config.language),
             page: 0,
             font: HFONT::default(),
+            small_font: HFONT::default(),
+            fonts: theme::Fonts::new(),
             controls: Vec::new(),
             checks: Vec::new(),
             tray_checks: Vec::new(),
@@ -184,7 +189,7 @@ pub fn open(shared: Arc<Mutex<Dashboard>>, sender: SyncSender<Command>) -> Resul
             incident_message: None,
             dpi: 96,
             last_incident_refresh: std::time::Instant::now(),
-            shown: [true; 7],
+            shown: [true; 8],
             surface: None,
             theme: Theme::new(),
             details_window: HWND::default(),
@@ -246,22 +251,13 @@ pub fn open(shared: Arc<Mutex<Dashboard>>, sender: SyncSender<Command>) -> Resul
                 SWP_NOZORDER | SWP_NOACTIVATE,
             );
         }
-        (*raw).font = CreateFontW(
-            -14 * (*raw).dpi / 96,
-            0,
-            0,
-            0,
-            400,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS,
-            CLIP_DEFAULT_PRECIS,
-            CLEARTYPE_QUALITY,
-            DEFAULT_PITCH.0 as u32,
-            w!("Segoe UI"),
-        );
+        (*raw).font = (*raw)
+            .fonts
+            .font(crate::design::BODY_SIZE, (*raw).dpi, &config.language);
+        (*raw).small_font =
+            (*raw)
+                .fonts
+                .font(crate::design::SMALL_SIZE, (*raw).dpi, &config.language);
         setup(hwnd, &mut *raw);
         layout(hwnd, &mut *raw);
         refresh(&mut *raw);
@@ -373,6 +369,15 @@ unsafe fn setup(hwnd: HWND, s: &mut State) {
             WS_TABSTOP,
             usize::MAX,
         );
+        control(
+            hwnd,
+            s,
+            w!("BUTTON"),
+            labels.get("quit"),
+            22,
+            WS_TABSTOP,
+            usize::MAX,
+        );
         s.footer = control(hwnd, s, w!("STATIC"), "", 31, WINDOW_STYLE(0), usize::MAX);
         s.tooltip = CreateWindowExW(
             WS_EX_TOPMOST,
@@ -401,9 +406,18 @@ unsafe fn setup(hwnd: HWND, s: &mut State) {
             WPARAM(TTDT_INITIAL as usize),
             LPARAM(350),
         );
-        for (i, label) in ["CPU", "RAM", "I/O", "Present API", "UI", "DPC", "ISR"]
-            .iter()
-            .enumerate()
+        for (i, label) in [
+            "CPU",
+            "RAM",
+            labels.get("linux_read"),
+            "Present API",
+            "UI",
+            "DPC",
+            "ISR",
+            labels.get("linux_write"),
+        ]
+        .iter()
+        .enumerate()
         {
             let c = control(
                 hwnd,
@@ -695,6 +709,76 @@ unsafe fn setup(hwnd: HWND, s: &mut State) {
         load_incidents(s);
     }
 }
+fn plot_geometry(s: &State, width: i32, height: i32) -> (f32, f32, f32) {
+    let top = if s.page == 2 {
+        312.0
+    } else {
+        crate::design::LIVE_TOP as f32
+    };
+    let (w, h) = crate::design::chart_size(
+        (width - 2 * crate::design::MARGIN) as f32,
+        height as f32 - top,
+        if s.page == 2 && s.mango_view { 1 } else { 2 },
+    );
+    (top, w.max(100.0), h.max(110.0))
+}
+unsafe fn legend_geometry(
+    s: &State,
+    index: usize,
+    width: i32,
+    height: i32,
+) -> (i32, i32, i32, i32) {
+    let (top, w, h) = plot_geometry(s, width, height);
+    let (group, first, second) = match index {
+        0 | 1 => (0, 0, index == 1),
+        2 | 7 => (1, 2, index == 7),
+        3 | 4 => (2, 3, index == 4),
+        _ => (3, 5, index == 6),
+    };
+    let measure = |metric: usize| unsafe {
+        let text = s
+            .controls
+            .iter()
+            .find(|(c, _)| GetDlgCtrlID(*c) == 400 + metric as i32)
+            .map(|(c, _)| window_text(*c))
+            .unwrap_or_default();
+        let text: Vec<_> = text.encode_utf16().collect();
+        let dc = GetDC(None);
+        let previous = SelectObject(dc, HGDIOBJ(s.font.0));
+        let mut size = SIZE::default();
+        let _ = GetTextExtentPoint32W(dc, &text, &mut size);
+        SelectObject(dc, previous);
+        ReleaseDC(None, dc);
+        (size.cx * 96 / s.dpi.max(1)) + 26
+    };
+    let x = crate::design::MARGIN
+        + (group % 2) * (w + crate::design::CHART_GAP) as i32
+        + if second { measure(first) } else { 0 };
+    let y = top as i32 + (group / 2) * (h + crate::design::CHART_GAP) as i32 + 24;
+    (x, y, measure(index), 22)
+}
+unsafe fn update_fonts(s: &mut State) {
+    let language = s
+        .shared
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .config
+        .language
+        .clone();
+    let old = s.font;
+    let small = s.small_font;
+    s.font = s.fonts.font(crate::design::BODY_SIZE, s.dpi, &language);
+    s.small_font = s.fonts.font(crate::design::SMALL_SIZE, s.dpi, &language);
+    for (control, _) in &s.controls {
+        unsafe {
+            send(*control, WM_SETFONT, WPARAM(s.font.0 as usize), LPARAM(0));
+        }
+    }
+    unsafe {
+        let _ = DeleteObject(HGDIOBJ(old.0));
+        let _ = DeleteObject(HGDIOBJ(small.0));
+    }
+}
 unsafe fn layout(hwnd: HWND, s: &mut State) {
     unsafe {
         let mut r = RECT::default();
@@ -708,67 +792,69 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
                 theme::set_active(c, id - 10 == s.page);
             }
             let (x, y, w, h) = match id {
-                10..=13 => (18 + (id as i32 - 10) * 120, 14, 112, 32),
-                20 => (width - 336, 14, 180, 30),
-                21 => (width - 148, 14, 132, 30),
+                10..=13 => (
+                    crate::design::MARGIN
+                        + (id as i32 - 10) * (crate::design::NAV_WIDTH + crate::design::GAP),
+                    crate::design::MARGIN,
+                    crate::design::NAV_WIDTH,
+                    crate::design::NAV_HEIGHT,
+                ),
+                20 => (width - 308, 18, 102, 32),
+                21 => (width - 198, 18, 102, 32),
+                22 => (width - 88, 18, 70, 32),
                 31 => (18, height - 38, width - 36, 24),
-                40 => (18, 76, width - 36, 24),
+                40 => (18, 122, width - 36, 24),
                 100..=113 => {
                     let i = id - 100;
                     (
-                        18 + (i / 7) as i32 * (width / 2),
-                        110 + (i % 7) as i32 * 28,
-                        width / 2 - 74,
+                        18 + (i / 7) as i32 * 242,
+                        150 + (i % 7) as i32 * 30,
+                        if i < 7 { 170 } else { 195 },
                         26,
                     )
                 }
                 500..=513 => {
                     let i = id - 500;
                     (
-                        width / 2 - 34 + (i / 7) as i32 * (width / 2),
-                        110 + (i % 7) as i32 * 28,
+                        if i < 7 { 196 } else { 463 },
+                        150 + (i % 7) as i32 * 30,
                         24,
                         26,
                     )
                 }
-                46 => (18, 334, width / 2 - 36, 20),
-                47 => (width / 2 + 18, 334, width / 2 - 36, 20),
-                200 => (18, 358, width / 2 - 36, 100),
-                42 => (18, 402, 156, 22),
-                201 => (180, 398, 130, 30),
-                43 => (330, 402, 160, 22),
-                202 => (500, 398, 80, 30),
-                203 => (width / 2 + 18, 358, width / 2 - 36, 202),
-                204 => (width - 160, 402, 140, 32),
-                205 => (18, 444, 200, 28),
+                46 => (18, 414, 108, 22),
+                47 => (18, 76, 64, 24),
+                200 => (128, 410, 230, 100),
+                42 => (18, 448, 110, 22),
+                201 => (136, 444, 60, 30),
+                43 => (210, 448, 74, 22),
+                202 => (290, 444, 60, 30),
+                203 => (90, 72, 170, 202),
+                204 => (18, 490, 90, 30),
+                205 => (18, 532, 170, 28),
                 44 => (18, 546, width - 36, (height - 632).max(35)),
-                45 => (18, 76, width - 264, 62),
-                301 => (width - 230, 76, 212, 32),
-                300 => (18, 146, width - 36, 130),
+                45 => (18, 242, width - 36, 62),
+                301 => (18, 72, 180, 30),
+                300 => (18, 112, width - 36, 120),
                 610 => (18, 76, width - 36, 24),
                 600..=606 => {
                     let i = id - 600;
-                    (
-                        18 + (i / 4) as i32 * (width / 2),
-                        112 + (i % 4) as i32 * 36,
-                        width / 2 - 42,
-                        30,
-                    )
+                    (18, 112 + i as i32 * 30, 420, 26)
                 }
-                612 => (18, 276, 140, 32),
-                613 => (18, 338, width - 36, 24),
+                612 => (
+                    18,
+                    352 + theme::preview_height(&window_text(s.tray_preview)),
+                    90,
+                    30,
+                ),
+                613 => (18, 320, width - 36, 20),
                 614 => (
                     18,
-                    374,
+                    340,
                     (width - 36).min(460),
                     theme::preview_height(&window_text(c)),
                 ),
-                400..=406 => (
-                    18 + (id as i32 - 400) * (width - 36) / 7,
-                    if s.page == 2 { 284 } else { 68 },
-                    (width - 36) / 7 - 6,
-                    25,
-                ),
+                400..=407 => legend_geometry(s, id - 400, width, height),
                 _ => (0, 0, 0, 0),
             };
             let _ = MoveWindow(
@@ -782,7 +868,7 @@ unsafe fn layout(hwnd: HWND, s: &mut State) {
             let _ = ShowWindow(
                 c,
                 if (page == usize::MAX || page == s.page || (page == 4 && matches!(s.page, 0 | 2)))
-                    && !(s.page == 2 && s.mango_view && (400..=406).contains(&id))
+                    && !(s.page == 2 && s.mango_view && (400..=407).contains(&id))
                 {
                     SW_SHOW
                 } else {
@@ -1104,18 +1190,9 @@ fn refresh(s: &mut State) {
         set_text(s.tray_preview, &preview);
         if old_height != new_height {
             unsafe {
-                let mut rect = RECT::default();
-                let _ = GetClientRect(s.tray_preview, &mut rect);
-                let _ = SetWindowPos(
-                    s.tray_preview,
-                    None,
-                    0,
-                    0,
-                    rect.right,
-                    new_height * s.dpi / 96,
-                    SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
-                );
-                let _ = InvalidateRect(GetParent(s.tray_preview).ok(), None, false);
+                if let Ok(parent) = GetParent(s.tray_preview) {
+                    layout(parent, s);
+                }
             }
         }
     }
@@ -1149,14 +1226,7 @@ fn refresh(s: &mut State) {
             } else {
                 "unknown"
             };
-            set_text(
-                s.checks[i],
-                &if selected && !available {
-                    format!("{} · {}", s.text.get(key), s.text.get(status))
-                } else {
-                    s.text.get(key).to_owned()
-                },
-            );
+            set_text(s.checks[i], s.text.get(key));
             let help = format!(
                 "{}{}",
                 s.text.get(&format!("help_{key}")),
@@ -1317,6 +1387,7 @@ unsafe fn config_changed(hwnd: HWND, s: &mut State) {
             .config
             .clone();
         s.text = Text::new(&config.language);
+        update_fonts(s);
         s.incident_rows.clear();
         let visible: Vec<_> = s
             .controls
@@ -1341,6 +1412,7 @@ unsafe fn config_changed(hwnd: HWND, s: &mut State) {
                 600..=606 => Some(TRAY_KEYS[id - 600]),
                 20 => Some("mark"),
                 21 => Some("pause"),
+                22 => Some("quit"),
                 40 => Some("collect_hint"),
                 42 => Some("budget"),
                 43 => Some("retention"),
@@ -1349,6 +1421,8 @@ unsafe fn config_changed(hwnd: HWND, s: &mut State) {
                 47 => Some("language"),
                 205 => Some("details"),
                 301 => Some("import_mangohud"),
+                402 => Some("linux_read"),
+                407 => Some("linux_write"),
                 100..=113 => Some(SOURCE_KEYS[id - 100]),
                 204 => Some("apply"),
                 _ => None,
@@ -1629,7 +1703,7 @@ unsafe fn select_incident(s: &mut State) {
                     fps,
                     frametime_ms,
                 } => {
-                    let mut values = [None; 7];
+                    let mut values = [None; 8];
                     values[3] = Some(frametime_ms);
                     values[4] = Some(fps);
                     s.incident.push(Point {
@@ -1794,6 +1868,7 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
         let _ = GetClientRect(hwnd, &mut client);
         if matches!(s.page, 1 | 3) {
             FillRect(target, &client, s.theme.background);
+            paint_dividers(target, client, s.dpi);
             let _ = EndPaint(hwnd, &ps);
             return;
         }
@@ -1809,18 +1884,13 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
                 .collect()
         };
         let k = s.dpi as f64 / 96.0;
-        let top = if s.page == 2 { 318.0 } else { 102.0 };
-        let bottom = client.bottom as f64 / k - 86.0;
-        let height = (((bottom - top - 24.0)
-            / if s.page == 2 && s.mango_view {
-                1.0
-            } else {
-                2.0
-            })
-        .max(64.0)
-            * k)
-            .ceil() as i32;
-        let width = (((client.right as f64 / k - 52.0) / 2.0) * k).ceil() as i32;
+        let (top, logical_width, logical_height) = plot_geometry(
+            s,
+            (client.right as f64 / k) as i32,
+            (client.bottom as f64 / k) as i32,
+        );
+        let height = (logical_height as f64 * k).ceil() as i32;
+        let width = (logical_width as f64 * k).ceil() as i32;
         let mut charts = Vec::new();
         let mango = s.page == 2 && s.mango_view;
         let definitions = if mango {
@@ -1828,14 +1898,16 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
         } else {
             vec![
                 ("graph_cpu", vec![0, 1]),
-                ("graph_disk", vec![2]),
+                ("graph_disk", vec![2, 7]),
                 ("graph_response", vec![3, 4]),
                 ("graph_dpc", vec![5, 6]),
             ]
         };
         for (i, (key, series)) in definitions.into_iter().enumerate() {
-            let left = (18.0 * k) as i32 + (i % 2) as i32 * (width + (16.0 * k) as i32);
-            let y = (top * k) as i32 + (i / 2) as i32 * (height + (24.0 * k) as i32);
+            let left = (crate::design::MARGIN as f64 * k) as i32
+                + (i % 2) as i32 * (width + (crate::design::CHART_GAP as f64 * k) as i32);
+            let y = (top as f64 * k) as i32
+                + (i / 2) as i32 * (height + (crate::design::CHART_GAP as f64 * k) as i32);
             charts.push((
                 RECT {
                     left,
@@ -1857,6 +1929,7 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
             ExcludeClipRect(target, r.left, r.top, r.right, r.bottom);
         }
         FillRect(target, &client, s.theme.background);
+        paint_dividers(target, client, s.dpi);
         let _ = RestoreDC(target, saved);
         if s.surface
             .as_ref()
@@ -1890,6 +1963,7 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
                         mango,
                         &s.text,
                         k,
+                        s.small_font,
                     );
                 } else {
                     draw_text(dc, r.left, r.top, s.text.get(key));
@@ -1912,6 +1986,18 @@ unsafe fn paint(hwnd: HWND, s: &mut State) {
         let _ = EndPaint(hwnd, &ps);
     }
 }
+unsafe fn paint_dividers(dc: HDC, client: RECT, dpi: i32) {
+    unsafe {
+        let pen = CreatePen(PS_SOLID, 1, theme::BORDER);
+        let old = SelectObject(dc, HGDIOBJ(pen.0));
+        for y in [62 * dpi / 96, client.bottom - 48 * dpi / 96] {
+            let _ = MoveToEx(dc, crate::design::MARGIN * dpi / 96, y, None);
+            let _ = LineTo(dc, client.right - crate::design::MARGIN * dpi / 96, y);
+        }
+        SelectObject(dc, old);
+        let _ = DeleteObject(HGDIOBJ(pen.0));
+    }
+}
 #[allow(clippy::too_many_arguments)]
 unsafe fn chart(
     dc: HDC,
@@ -1924,6 +2010,7 @@ unsafe fn chart(
     relative: bool,
     text: &Text,
     k: f64,
+    small_font: HFONT,
 ) {
     unsafe {
         draw_text(dc, r.left, r.top, title);
@@ -1932,7 +2019,7 @@ unsafe fn chart(
         }
         let plot = RECT {
             left: r.left + (42.0 * k) as i32,
-            top: r.top + (28.0 * k) as i32,
+            top: r.top + (crate::design::CHART_HEADER as f64 * k) as i32,
             right: r.right - 8,
             bottom: r.bottom - (22.0 * k) as i32,
         };
@@ -2038,6 +2125,8 @@ unsafe fn chart(
             );
             SetTextColor(dc, theme::FOREGROUND);
         }
+        let old_font = SelectObject(dc, HGDIOBJ(small_font.0));
+        SetTextColor(dc, theme::MUTED);
         let grid = CreatePen(PS_SOLID, 1, theme::GRID);
         let old = SelectObject(dc, HGDIOBJ(grid.0));
         for i in 0..=4 {
@@ -2054,7 +2143,7 @@ unsafe fn chart(
         SelectObject(dc, old);
         let _ = DeleteObject(HGDIOBJ(grid.0));
         for &metric in series {
-            let color = if matches!(metric, 1 | 4 | 6) {
+            let color = if matches!(metric, 1 | 4 | 6 | 7) {
                 theme::AMBER
             } else {
                 theme::BLUE
@@ -2142,6 +2231,7 @@ unsafe fn chart(
             plot.bottom + 3,
             &time(end),
         );
+        SelectObject(dc, old_font);
     }
 }
 unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
@@ -2185,6 +2275,7 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
                 }
                 WM_DPICHANGED => {
                     s.dpi = (wp.0 & 0xffff) as i32;
+                    update_fonts(s);
                     let r = &*(lp.0 as *const RECT);
                     let _ = SetWindowPos(
                         hwnd,
@@ -2278,6 +2369,10 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
                         21 => {
                             let _ = s.sender.try_send(Command::Pause);
                         }
+                        22 => {
+                            let _ = s.sender.try_send(Command::Quit);
+                            let _ = DestroyWindow(hwnd);
+                        }
                         301 if s.importing.is_none() => {
                             let config = s
                                 .shared
@@ -2319,7 +2414,7 @@ unsafe extern "system" fn window_proc(hwnd: HWND, message: u32, wp: WPARAM, lp: 
                             select_incident(s);
                             let _ = InvalidateRect(Some(hwnd), None, false);
                         }
-                        400..=406 => {
+                        400..=407 => {
                             let id = wp.0 & 0xffff;
                             s.shown[id - 400] =
                                 send(HWND(lp.0 as *mut _), BM_GETCHECK, WPARAM(0), LPARAM(0)).0
@@ -2377,13 +2472,13 @@ mod tests {
         let points = vec![
             Point {
                 ts: 1000,
-                values: [None; 7],
+                values: [None; 8],
                 alerts: crate::assessment::WINDOW,
                 span_ms: 50,
             },
             Point {
                 ts: 9000,
-                values: [None; 7],
+                values: [None; 8],
                 alerts: crate::assessment::CPU_BUSY,
                 span_ms: 500,
             },
@@ -2403,7 +2498,7 @@ mod tests {
         let points: Vec<_> = (0..1000)
             .map(|i| Point {
                 ts: i,
-                values: [Some(if i == 513 { 250.0 } else { 1.0 }); 7],
+                values: [Some(if i == 513 { 250.0 } else { 1.0 }); 8],
                 alerts: 0,
                 span_ms: 1,
             })

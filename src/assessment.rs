@@ -151,7 +151,7 @@ pub fn severity(flags: u16, series: &[usize]) -> u8 {
         mask | match metric {
             0 => CPU_BUSY,
             1 => RAM_BUSY | RAM_LOW,
-            2 => DISK,
+            2 | 7 => DISK,
             3 => PRESENT | DWM,
             4 => WINDOW,
             5 | 6 => DPC | DRIVER,

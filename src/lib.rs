@@ -4,6 +4,7 @@ pub mod branding;
 pub mod capacity;
 pub mod config;
 pub mod dashboard;
+pub mod design;
 pub mod detector;
 pub mod history;
 pub mod hotkey;

@@ -4,7 +4,12 @@ use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
+use stutter_watch::design;
 use stutter_watch::i18n::{LANGUAGE_NAMES, LANGUAGES, Text};
+
+const fn color(rgb: [u8; 3]) -> Color32 {
+    Color32::from_rgb(rgb[0], rgb[1], rgb[2])
+}
 
 pub fn run(path: &Path) -> Result<()> {
     let lock = std::fs::OpenOptions::new()
@@ -49,15 +54,15 @@ pub fn run(path: &Path) -> Result<()> {
         options,
         Box::new(move |cc| {
             let mut visuals = egui::Visuals::dark();
-            visuals.panel_fill = Color32::from_rgb(25, 28, 33);
+            visuals.panel_fill = color(design::BACKGROUND);
             visuals.window_fill = visuals.panel_fill;
-            visuals.override_text_color = Some(Color32::from_rgb(226, 231, 239));
+            visuals.override_text_color = Some(color(design::FOREGROUND));
             visuals.selection.bg_fill = Color32::from_rgb(35, 53, 77);
-            visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(43, 48, 56);
-            visuals.widgets.inactive.bg_fill = Color32::from_rgb(31, 35, 41);
-            visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Color32::from_rgb(64, 72, 84));
-            visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(54, 61, 71);
-            visuals.widgets.active.weak_bg_fill = Color32::from_rgb(14, 18, 24);
+            visuals.widgets.inactive.weak_bg_fill = color(design::BUTTON);
+            visuals.widgets.inactive.bg_fill = color(design::FIELD);
+            visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, color(design::BORDER));
+            visuals.widgets.hovered.weak_bg_fill = color(design::HOVER);
+            visuals.widgets.active.weak_bg_fill = color(design::ACTIVE);
             for widget in [
                 &mut visuals.widgets.inactive,
                 &mut visuals.widgets.hovered,
@@ -67,25 +72,25 @@ pub fn run(path: &Path) -> Result<()> {
             }
             cc.egui_ctx.set_visuals(visuals);
             cc.egui_ctx.style_mut_of(egui::Theme::Dark, |style| {
-                style.spacing.item_spacing = Vec2::new(8.0, 8.0);
+                style.spacing.item_spacing = Vec2::splat(design::GAP as f32);
                 style.spacing.button_padding = Vec2::new(12.0, 6.0);
-                style
-                    .text_styles
-                    .insert(egui::TextStyle::Body, FontId::proportional(14.0));
-                style
-                    .text_styles
-                    .insert(egui::TextStyle::Button, FontId::proportional(14.0));
+                style.text_styles.insert(
+                    egui::TextStyle::Body,
+                    FontId::proportional(design::BODY_SIZE as f32),
+                );
+                style.text_styles.insert(
+                    egui::TextStyle::Button,
+                    FontId::proportional(design::BODY_SIZE as f32),
+                );
             });
             let mut fonts = egui::FontDefinitions::default();
+            fonts.font_data.insert(
+                "Ubuntu-Light".into(),
+                Arc::new(egui::FontData::from_static(design::LATIN_FONT)),
+            );
             for (name, bytes) in [
-                (
-                    "cjk-sc",
-                    include_bytes!("../../assets/fonts/ui-cjk-sc.otf").as_slice(),
-                ),
-                (
-                    "cjk-jp",
-                    include_bytes!("../../assets/fonts/ui-cjk-jp.otf").as_slice(),
-                ),
+                ("cjk-sc", design::CJK_SC_FONT),
+                ("cjk-jp", design::CJK_JP_FONT),
             ] {
                 fonts
                     .font_data
@@ -420,14 +425,19 @@ impl App {
         ];
         egui::Grid::new("sources")
             .num_columns(4)
-            .spacing([30.0, 10.0])
+            .spacing([8.0, 4.0])
             .show(ui, |ui| {
                 for row in 0..7 {
                     for col in 0..2 {
                         let i = col * 7 + row;
                         let key = keys[i];
                         let supported = !matches!(i, 7 | 8 | 11 | 12 | 13);
-                        ui.add_enabled(supported, egui::Checkbox::new(&mut flags[i], t.get(key)));
+                        ui.add_enabled_ui(supported, |ui| {
+                            ui.add_sized(
+                                [if col == 0 { 170.0 } else { 195.0 }, 26.0],
+                                egui::Checkbox::new(&mut flags[i], t.get(key)),
+                            );
+                        });
                         let help = t.get(&format!("help_{key}")).to_owned();
                         let status = snapshot
                             .and_then(|s| s.latest.as_ref())
@@ -436,7 +446,8 @@ impl App {
                             .filter(|s| !s.available || s.partial)
                             .map(|s| t.get(&s.reason))
                             .unwrap_or("");
-                        ui.label("ⓘ").on_hover_text(format!("{help}\n{reason}"));
+                        ui.add_sized([24.0, 26.0], egui::Label::new("ⓘ"))
+                            .on_hover_text(format!("{help}\n{reason}"));
                     }
                     ui.end_row();
                 }
@@ -514,14 +525,28 @@ impl App {
     }
     fn tray_page(&mut self, ui: &mut egui::Ui, t: &Text, snapshot: Option<&Snapshot>) {
         ui.label(t.get("tray_choose"));
+        ui.add_space(8.0);
         for (key, selected) in [
             ("tray_status", &mut self.config.tray_display.status),
             ("cpu_total", &mut self.config.tray_display.cpu),
             ("memory", &mut self.config.tray_display.memory),
             ("gpu", &mut self.config.tray_display.gpu),
             ("disks", &mut self.config.tray_display.disk_latency),
+            ("dpc", &mut self.config.tray_display.dpc),
+            (
+                "window_response",
+                &mut self.config.tray_display.window_response,
+            ),
         ] {
-            ui.checkbox(selected, t.get(key));
+            ui.add_enabled_ui(!matches!(key, "dpc" | "window_response"), |ui| {
+                ui.add_sized([420.0, 22.0], egui::Checkbox::new(selected, t.get(key)));
+            })
+            .response
+            .on_hover_text(if matches!(key, "dpc" | "window_response") {
+                t.get("linux_platform_source")
+            } else {
+                ""
+            });
         }
         let preview = stutter_watch::tray_display::tooltip(
             &self.config,
@@ -530,10 +555,12 @@ impl App {
             snapshot.is_some_and(|s| s.paused),
             false,
         );
-        egui::Frame::group(ui.style()).show(ui, |ui| {
-            ui.label(preview);
-        });
-        if ui.button(t.get("apply")).clicked() {
+        ui.label(t.get("tray_preview"));
+        tray_preview(ui, &preview);
+        if ui
+            .add_sized([90.0, 30.0], egui::Button::new(t.get("apply")))
+            .clicked()
+        {
             self.apply_tray();
         }
         ui.add_space(16.0);
@@ -595,8 +622,8 @@ impl eframe::App for App {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::default()
-                    .inner_margin(18.0)
-                    .fill(Color32::from_rgb(25, 28, 33)),
+                    .inner_margin(design::MARGIN as f32)
+                    .fill(color(design::BACKGROUND)),
             )
             .show(root, |ui| {
                 ui.horizontal(|ui| {
@@ -605,17 +632,17 @@ impl eframe::App for App {
                         .enumerate()
                     {
                         let response = ui.add_sized(
-                            [112.0, 32.0],
+                            [design::NAV_WIDTH as f32, design::NAV_HEIGHT as f32],
                             egui::Button::new(text.get(key)).fill(if self.page == i {
-                                Color32::from_rgb(14, 18, 24)
+                                color(design::ACTIVE)
                             } else {
-                                Color32::from_rgb(43, 48, 56)
+                                color(design::BUTTON)
                             }),
                         );
                         if self.page == i {
                             ui.painter().line_segment(
                                 [response.rect.left_bottom(), response.rect.right_bottom()],
-                                Stroke::new(2.0, Color32::from_rgb(125, 173, 245)),
+                                Stroke::new(2.0, color(design::BLUE)),
                             );
                         }
                         if response.clicked() {
@@ -623,21 +650,32 @@ impl eframe::App for App {
                         }
                     }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(text.get("quit")).clicked() {
+                        if ui
+                            .add_sized([70.0, 32.0], egui::Button::new(text.get("quit")))
+                            .clicked()
+                        {
                             self.action("shutdown");
                             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                         if ui
-                            .button(text.get(if snapshot.as_ref().is_some_and(|s| s.paused) {
-                                "resume"
-                            } else {
-                                "pause"
-                            }))
+                            .add_sized(
+                                [102.0, 32.0],
+                                egui::Button::new(text.get(
+                                    if snapshot.as_ref().is_some_and(|s| s.paused) {
+                                        "resume"
+                                    } else {
+                                        "pause"
+                                    },
+                                )),
+                            )
                             .clicked()
                         {
                             self.action("pause");
                         }
-                        if ui.button(text.get("mark")).clicked() {
+                        if ui
+                            .add_sized([102.0, 32.0], egui::Button::new(text.get("mark")))
+                            .clicked()
+                        {
                             self.action("mark");
                         }
                     });
@@ -733,16 +771,18 @@ impl eframe::App for App {
                             .map(|s| s.points.as_slice())
                             .unwrap_or(&[])
                     };
-                    let height = ((ui.available_height() - 42.0)
-                        / if self.page == 2 && self.mango_view {
-                            1.0
+                    let (width, height) = design::chart_size(
+                        ui.available_width(),
+                        ui.available_height(),
+                        if self.page == 2 && self.mango_view {
+                            1
                         } else {
-                            2.0
-                        })
-                    .max(100.0);
-                    let width = ((ui.available_width() - 16.0) / 2.0).max(240.0);
+                            2
+                        },
+                    );
+                    let (width, height) = (width.max(240.0), height.max(100.0));
                     egui::Grid::new("charts")
-                        .spacing([12.0, 12.0])
+                        .spacing([design::CHART_GAP, design::CHART_GAP])
                         .show(ui, |ui| {
                             let charts = if self.page == 2 && self.mango_view {
                                 vec![
@@ -790,7 +830,10 @@ impl eframe::App for App {
                                             } else {
                                                 i
                                             },
-                                            Vec2::new(width, (height - 58.0).max(60.0)),
+                                            Vec2::new(
+                                                width,
+                                                (height - design::CHART_HEADER as f32).max(60.0),
+                                            ),
                                         );
                                     },
                                 );
@@ -801,9 +844,10 @@ impl eframe::App for App {
                         });
                 }
                 if let Some(s) = &snapshot {
+                    ui.add_space((ui.available_height() - 34.0).max(0.0));
                     ui.separator();
                     ui.label(format!(
-                        "{}: {:.1} / {:.0} MB · {}: {:.1} MB · {} MB/h",
+                        "{}: {:.1} / {:.0} MB · {}: {:.1} MB · {} MB/{}",
                         text.get("ordinary"),
                         s.recording.usage.ordinary_bytes as f64 / 1e6,
                         s.config.history.ordinary_budget_bytes as f64 / 1e6,
@@ -815,7 +859,8 @@ impl eframe::App for App {
                         )
                         .bytes_per_hour
                         .map(|v| format!("{:.1}", v / 1e6))
-                        .unwrap_or_else(|| "—".into())
+                        .unwrap_or_else(|| "—".into()),
+                        text.get("unit_hour")
                     ));
                     if !s.recording.error.is_empty() {
                         ui.colored_label(
@@ -829,10 +874,56 @@ impl eframe::App for App {
     }
 }
 const COLORS: [Color32; 3] = [
-    Color32::from_rgb(125, 173, 245),
-    Color32::from_rgb(223, 176, 105),
-    Color32::from_rgb(114, 188, 150),
+    color(design::BLUE),
+    color(design::AMBER),
+    color(design::GREEN),
 ];
+fn tray_preview(ui: &mut egui::Ui, text: &str) {
+    let height = 64.0 + text.lines().count().saturating_sub(1) as f32 * 22.0;
+    let (rect, _) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width().min(460.0), height),
+        egui::Sense::hover(),
+    );
+    let painter = ui.painter_at(rect);
+    painter.rect(
+        rect,
+        4.0,
+        color(design::FIELD),
+        Stroke::new(1.0, color(design::BORDER)),
+        egui::StrokeKind::Inside,
+    );
+    for (x, y) in [(18.0, 28.0), (25.0, 20.0), (32.0, 24.0)] {
+        painter.rect_filled(
+            egui::Rect::from_min_max(
+                rect.min + Vec2::new(x, y),
+                rect.min + Vec2::new(x + 4.0, 36.0),
+            ),
+            0.0,
+            color(design::BLUE),
+        );
+    }
+    let mut lines = text.lines();
+    painter.text(
+        rect.min + Vec2::new(52.0, 20.0),
+        Align2::LEFT_TOP,
+        lines.next().unwrap_or(""),
+        FontId::proportional(16.0),
+        color(design::FOREGROUND),
+    );
+    for (i, line) in lines.enumerate() {
+        painter.text(
+            rect.min + Vec2::new(18.0, 50.0 + i as f32 * 22.0),
+            Align2::LEFT_TOP,
+            line,
+            FontId::proportional(design::BODY_SIZE as f32),
+            color(if line.contains("ms/") {
+                design::MUTED
+            } else {
+                design::FOREGROUND
+            }),
+        );
+    }
+}
 fn chart(
     ui: &mut egui::Ui,
     points: &[Point],
@@ -843,8 +934,11 @@ fn chart(
 ) {
     let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 0.0, Color32::from_rgb(25, 29, 33));
-    let plot = rect.shrink2(Vec2::new(29.0, 15.0));
+    painter.rect_filled(rect, 0.0, color(design::BACKGROUND));
+    let plot = egui::Rect::from_min_max(
+        rect.min + Vec2::new(42.0, 0.0),
+        rect.max - Vec2::new(8.0, 22.0),
+    );
     let end = points.last().map(|p| p.ts).unwrap_or(now_ms());
     let first = points.first().map(|p| p.ts).unwrap_or(end);
     let start = if group >= 4 {
@@ -867,14 +961,14 @@ fn chart(
         let y = plot.bottom() - plot.height() * i as f32 / 4.0;
         painter.line_segment(
             [Pos2::new(plot.left(), y), Pos2::new(plot.right(), y)],
-            Stroke::new(0.5, Color32::from_gray(65)),
+            Stroke::new(1.0, color(design::GRID)),
         );
         painter.text(
             Pos2::new(rect.left(), y),
             Align2::LEFT_CENTER,
             format!("{:.0}", max * i as f64 / 4.0),
-            FontId::proportional(10.0),
-            Color32::GRAY,
+            FontId::proportional(design::SMALL_SIZE as f32),
+            color(design::MUTED),
         );
     }
     for p in points {
@@ -908,9 +1002,9 @@ fn chart(
                 ),
                 0.0,
                 if red {
-                    Color32::from_rgba_unmultiplied(190, 55, 55, 50)
+                    color(design::DANGER_BG)
                 } else {
-                    Color32::from_rgba_unmultiplied(210, 160, 55, 40)
+                    color(design::WARNING_BG)
                 },
             );
         }
@@ -964,14 +1058,14 @@ fn chart(
         Pos2::new(plot.left(), rect.bottom()),
         Align2::LEFT_BOTTOM,
         time(start),
-        FontId::proportional(10.0),
-        Color32::GRAY,
+        FontId::proportional(design::SMALL_SIZE as f32),
+        color(design::MUTED),
     );
     painter.text(
         Pos2::new(plot.right(), rect.bottom()),
         Align2::RIGHT_BOTTOM,
         time(end),
-        FontId::proportional(10.0),
-        Color32::GRAY,
+        FontId::proportional(design::SMALL_SIZE as f32),
+        color(design::MUTED),
     );
 }
