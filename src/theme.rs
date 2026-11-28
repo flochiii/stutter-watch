@@ -576,16 +576,12 @@ unsafe fn paint_control(hwnd: HWND, style: &mut ControlStyle) {
                 let _ = DeleteObject(HGDIOBJ(pen.0));
             }
         }
-        if GetFocus() == hwnd {
-            let mut focus = r;
-            let inset = if matches!(style.kind, Kind::Checkbox) {
-                (dpi / 96).max(1)
-            } else {
-                (3 * dpi / 96).max(1)
-            };
-            let _ = InflateRect(&mut focus, -inset, -inset);
-            SetTextColor(dc, MUTED);
-            let _ = DrawFocusRect(dc, &focus);
+        let keyboard_focus = GetFocus() == hwnd
+            && SendMessageW(hwnd, WM_QUERYUISTATE, None, None).0 as u32 & UISF_HIDEFOCUS == 0;
+        if keyboard_focus {
+            let brush = CreateSolidBrush(BLUE);
+            FrameRect(dc, &r, brush);
+            let _ = DeleteObject(HGDIOBJ(brush.0));
         }
         let _ = RestoreDC(dc, saved);
         if dc != target {
@@ -670,6 +666,7 @@ unsafe extern "system" fn control_proc(
                 | CB_SETCURSEL
                 | WM_SETTEXT
                 | WM_ENABLE
+                | WM_UPDATEUISTATE
         ) {
             let _ = InvalidateRect(Some(hwnd), None, false);
         }
