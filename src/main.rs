@@ -11,6 +11,8 @@ mod collectors;
 #[cfg(windows)]
 mod identity;
 #[cfg(windows)]
+mod maintenance;
+#[cfg(windows)]
 mod panel;
 #[cfg(windows)]
 mod sources;

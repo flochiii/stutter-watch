@@ -140,6 +140,54 @@ pub fn start() -> Result<()> {
     Ok(())
 }
 
+/// Never remove or restart a task belonging to another installation/configuration.
+pub fn owned(exe: &Path, config: &Path) -> bool {
+    let Ok(name) = task_name() else {
+        return false;
+    };
+    let Ok(output) = command("schtasks.exe")
+        .args(["/Query", "/TN", &name, "/XML"])
+        .output()
+    else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    let raw = &output.stdout;
+    let text = if raw.starts_with(&[0xff, 0xfe]) || raw.get(1) == Some(&0) {
+        String::from_utf16_lossy(
+            &raw.chunks_exact(2)
+                .map(|b| u16::from_le_bytes([b[0], b[1]]))
+                .filter(|v| *v != 0xfeff)
+                .collect::<Vec<_>>(),
+        )
+    } else {
+        command_output(raw)
+    };
+    task_matches(&text, exe, config)
+}
+
+fn task_matches(xml: &str, exe: &Path, config: &Path) -> bool {
+    let Ok(doc) = roxmltree::Document::parse(xml) else {
+        return false;
+    };
+    let get = |key: &str| {
+        doc.descendants()
+            .find(|n| n.is_element() && n.tag_name().name() == key)
+            .and_then(|n| n.text())
+            .unwrap_or("")
+    };
+    let normalized = |p: &Path| {
+        p.to_string_lossy()
+            .trim_start_matches(r"\\?\")
+            .replace('/', "\\")
+            .to_lowercase()
+    };
+    normalized(Path::new(get("Command"))) == normalized(exe)
+        && get("Arguments").to_lowercase() == format!("--config \"{}\" run", normalized(config))
+}
+
 fn task_xml_bytes(xml: &str) -> Vec<u8> {
     // schtasks reads task definitions as Unicode. Match the declaration and BOM.
     std::iter::once(0xfeffu16)

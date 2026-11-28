@@ -45,6 +45,16 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Installer lifecycle commands; recordings and user configuration are preserved.
+    #[command(hide = true)]
+    Maintenance {
+        #[arg(value_parser = ["prepare", "resume", "rollback", "uninstall"])]
+        operation: String,
+        #[arg(long)]
+        directory: PathBuf,
+        #[arg(long)]
+        receipt: PathBuf,
+    },
     Run,
     /// Open the panel of the existing recorder.
     Show,
@@ -125,6 +135,11 @@ fn execute(cli: Cli) -> Result<()> {
         );
     }
     match cli.command {
+        Some(Command::Maintenance {
+            operation,
+            directory,
+            receipt,
+        }) => crate::maintenance::execute(&operation, &directory, &receipt),
         Some(Command::Show) => tray::signal(&cli.config, false),
         Some(Command::Shutdown) => tray::signal(&cli.config, true),
         Some(Command::Status) => {
