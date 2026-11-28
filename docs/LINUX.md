@@ -2,6 +2,8 @@
 
 The v0.2 source contains a Linux desktop application and a separate background recorder. Packaged downloads will be attached to the v0.2 release after validation. Supported architecture: x86_64, glibc 2.35 or later. Both X11 and Wayland are supported.
 
+![Monitor](https://raw.githubusercontent.com/flochiii/stutter-watch/main/docs/images/linux-monitor.png)
+
 ## Install
 
 - Debian/Ubuntu: `sudo apt install ./stutter-watch_0.2.0_amd64.deb`
@@ -15,6 +17,8 @@ Configuration: `$XDG_CONFIG_HOME/stutter-watch/config.toml` (default `~/.config/
 ## Shared features and platform sources
 
 Windows and Linux share protected bookmarks, compressed history, configurable collection, automatic annotations, reports, ten languages, and local MangoHud CSV import. On either platform, choose **Import MangoHud CSV** on Incidents or run `stutter-watch --config PATH import-mangohud finished.csv`. MangoHud logging is configured by the user. Imported FPS and frame time use a relative timeline; they are not silently correlated with system timestamps.
+
+![Collection settings](https://raw.githubusercontent.com/flochiii/stutter-watch/main/docs/images/linux-data.png)
 
 Linux reads CPU, memory, disks, processes and pressure stalls from procfs. GPU coverage depends on readable DRM fdinfo/sysfs, permissions and driver support. Sleeping or unconfirmed GPUs are not queried for detailed sensors. Missing measurements remain unavailable. PSI identifies time waiting for resources; high CPU utilization alone does not prove a stutter.
 

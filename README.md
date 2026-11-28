@@ -27,7 +27,7 @@ Stutter Watch records system activity in the background and saves the context ar
 - Background recording, tray controls and a global bookmark shortcut.
 - Ten interface languages.
 
-![Settings](docs/images/linux-data.png)
+![Settings](docs/images/windows-data.png)
 
 ## Use
 
