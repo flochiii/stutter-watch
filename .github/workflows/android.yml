@@ -22,8 +22,13 @@ jobs:
           java-version: '21'
       - name: Install Rust
         run: rustup toolchain install 1.97.1 --profile minimal && rustup override set 1.97.1
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          cmdline-tools-version: '13114758'
+          log-accepted-android-sdk-licenses: false
       - name: Install Android build tools
-        run: sdkmanager --install 'platforms;android-37' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+        run: sdkmanager --install 'platforms;android-37.0' 'build-tools;36.0.0' 'ndk;28.2.13676358'
       - name: Cache build dependencies
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
